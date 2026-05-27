@@ -1,0 +1,3 @@
+bool connected
+uint8 system_id
+string message

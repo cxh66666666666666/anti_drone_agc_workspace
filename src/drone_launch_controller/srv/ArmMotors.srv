@@ -1,0 +1,5 @@
+bool force
+---
+bool success
+uint8 result
+string message

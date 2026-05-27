@@ -1,0 +1,38 @@
+<launch>
+    <arg name="connection_timeout" default="10.0" doc="Connection timeout in seconds"/>
+    <arg name="target_altitude" default="5.0" doc="Default target altitude for takeoff in meters"/>
+    <arg name="takeoff_timeout" default="30.0" doc="Takeoff timeout in seconds"/>
+    <arg name="arm_timeout" default="5.0" doc="Arm motors timeout in seconds"/>
+    <arg name="max_altitude_limit" default="100.0" doc="Maximum altitude limit in meters"/>
+    <arg name="max_speed_limit" default="10.0" doc="Maximum speed limit in m/s"/>
+    <arg name="geofence_radius" default="500.0" doc="Geofence radius in meters"/>
+    <arg name="status_publish_rate" default="10.0" doc="Flight status publish rate in Hz"/>
+    <arg name="mavros_ns" default="/mavros" doc="MAVROS namespace"/>
+
+    <node name="drone_launch_controller"
+          pkg="drone_launch_controller"
+          type="drone_launch_controller_node"
+          output="screen"
+          required="false">
+        <param name="connection_timeout" type="double" value="$(arg connection_timeout)"/>
+        <param name="target_altitude" type="double" value="$(arg target_altitude)"/>
+        <param name="takeoff_timeout" type="double" value="$(arg takeoff_timeout)"/>
+        <param name="arm_timeout" type="double" value="$(arg arm_timeout)"/>
+        <param name="max_altitude_limit" type="double" value="$(arg max_altitude_limit)"/>
+        <param name="max_speed_limit" type="double" value="$(arg max_speed_limit)"/>
+        <param name="geofence_radius" type="double" value="$(arg geofence_radius)"/>
+        <param name="status_publish_rate" type="double" value="$(arg status_publish_rate)"/>
+        <param name="mavros_ns" type="string" value="$(arg mavros_ns)"/>
+
+        <remap from="/mavros/state" to="$(arg mavros_ns)/state"/>
+        <remap from="/mavros/battery" to="$(arg mavros_ns)/battery"/>
+        <remap from="/mavros/global_position/global" to="$(arg mavros_ns)/global_position/global"/>
+        <remap from="/mavros/local_position/pose" to="$(arg mavros_ns)/local_position/pose"/>
+        <remap from="/mavros/set_mode" to="$(arg mavros_ns)/set_mode"/>
+        <remap from="/drone_launch_controller/flight_status" to="/drone_launch_controller/flight_status"/>
+    </node>
+
+    <node pkg="rostopic" type="rostopic" name="flight_status_monitor"
+          args="echo /drone_launch_controller/flight_status"
+          output="log" if_eq="false"/>
+</launch>

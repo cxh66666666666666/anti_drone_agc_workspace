@@ -1,0 +1,12 @@
+build/
+devel/
+logs/
+
+.catkin_tools/
+.codex/
+.agents/
+.gitrepo/
+
+*.pyc
+__pycache__/
+.DS_Store

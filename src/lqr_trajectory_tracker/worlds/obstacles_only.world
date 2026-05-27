@@ -1,0 +1,210 @@
+<?xml version="1.0"?>
+<sdf version="1.6">
+  <!-- 白色障碍物方块1 -->
+  <model name="obstacle_1">
+    <static>true</static>
+    <pose>5 5 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>2 2 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>2 2 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- 白色障碍物方块2 -->
+  <model name="obstacle_2">
+    <static>true</static>
+    <pose>-8 3 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>3 3 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>3 3 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- 白色障碍物方块3 -->
+  <model name="obstacle_3">
+    <static>true</static>
+    <pose>10 -7 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>2.5 2.5 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>2.5 2.5 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- 白色障碍物方块4 -->
+  <model name="obstacle_4">
+    <static>true</static>
+    <pose>-12 -10 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>4 4 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>4 4 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- 白色障碍物方块5 -->
+  <model name="obstacle_5">
+    <static>true</static>
+    <pose>15 12 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>3 3 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>3 3 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- 白色障碍物方块6 -->
+  <model name="obstacle_6">
+    <static>true</static>
+    <pose>-5 -15 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>2 4 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>2 4 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- 白色障碍物方块7 -->
+  <model name="obstacle_7">
+    <static>true</static>
+    <pose>0 18 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>5 2 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>5 2 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+
+  <!-- 白色障碍物方块8 -->
+  <model name="obstacle_8">
+    <static>true</static>
+    <pose>-18 8 4 0 0 0</pose>
+    <link name="obstacle_link">
+      <collision name="collision">
+        <geometry>
+          <box>
+            <size>3 3 8</size>
+          </box>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <box>
+            <size>3 3 8</size>
+          </box>
+        </geometry>
+        <material>
+          <ambient>1 1 1 1</ambient>
+          <diffuse>1 1 1 1</diffuse>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
