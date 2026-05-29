@@ -17,17 +17,11 @@ namespace drone_launch_controller {
 FlightStatusPublisher::FlightStatusPublisher(ros::NodeHandle& nh, TakeoffController* takeoff_controller)
     : nh_(nh)
     , takeoff_controller_(takeoff_controller)
-    , current_altitude_(0.0f)
-    , target_altitude_(0.0f)
-    , armed_(0)
-    , state_(INIT)
     , publishing_(false)
 {
-    status_pub_ = nh_.advertise<std_msgs::String>("/drone_launch_controller/flight_status", 10);
+    status_pub_ = nh_.advertise<drone_launch_controller::FlightStatus>("/drone_launch_controller/flight_status", 10);
 
-    flight_mode_ = "INIT";
-
-    ROS_INFO("FlightStatusPublisher initialized");
+    ROS_INFO("[FlightStatusPublisher] 初始化完成");
 }
 
 /**
@@ -38,40 +32,19 @@ FlightStatusPublisher::~FlightStatusPublisher() {
 }
 
 /**
- * @brief 更新无人机飞行状态
- * @param flight_mode 飞行模式
- * @param current_altitude 当前高度
- * @param target_altitude 目标高度
- * @param latitude 纬度
- * @param longitude 经度
- * @param armed 是否已起飞
- * @param state 飞行状态
- * @param message 状态消息
- */
-void FlightStatusPublisher::updateStatus(const std::string& flight_mode, float current_altitude,
-                                        float target_altitude, float latitude, float longitude,
-                                        uint8_t armed, FlightState state, const std::string& message) {
-    flight_mode_ = flight_mode;
-    current_altitude_ = current_altitude;
-    target_altitude_ = target_altitude;
-    armed_ = armed;
-    state_ = state;
-}
-
-/**
  * @brief 开始发布无人机飞行状态
  * @param rate 发布频率（单位：Hz）
  */
 void FlightStatusPublisher::startPublishing(double rate) {
     if (publishing_) {
-        ROS_WARN("无人机飞行状态已发布");
+        ROS_WARN("[FlightStatusPublisher] 已发布");
         return;
     }
 
     publishing_ = true;
     double period = 1.0 / rate;
     publish_timer_ = nh_.createTimer(ros::Duration(period), &FlightStatusPublisher::publishTimerCallback, this);
-    ROS_INFO("无人机飞行状态发布器开始发布，频率 %.2f Hz", rate);
+    ROS_INFO("[FlightStatusPublisher] 开始发布，频率 %.2f Hz", rate);
 }
 
 /**
@@ -79,31 +52,38 @@ void FlightStatusPublisher::startPublishing(double rate) {
  */
 void FlightStatusPublisher::stopPublishing() {
     if (!publishing_) {
-        ROS_WARN("无人机飞行状态未发布，无需停止");
+        ROS_WARN("[FlightStatusPublisher] 未发布，无需停止");
         return;
     }
 
     publishing_ = false;
     publish_timer_.stop();
-    ROS_INFO("无人机飞行状态发布器停止发布");
+    ROS_INFO("[FlightStatusPublisher] 停止发布");
 }
 
 /**
  * @brief 定时器回调函数，用于发布无人机飞行状态
  * @param event ROS定时器事件
  */
-void FlightStatusPublisher::publishTimerCallback(const ros::TimerEvent& event) {
-    if (takeoff_controller_ != nullptr) {
-        current_altitude_ = takeoff_controller_->getCurrentAltitude();
-        state_ = takeoff_controller_->getCurrentState();
+void FlightStatusPublisher::publishTimerCallback(const ros::TimerEvent& event) 
+{
+    float current_alt = 0.0f;
+    FlightState state = INIT;
+    if (takeoff_controller_ != nullptr) 
+    {
+        current_alt = takeoff_controller_->getCurrentAltitude();
+        state = takeoff_controller_->getCurrentState();
     }
 
-    std_msgs::String msg;
-    msg.data = "FlightMode: " + flight_mode_ +
-                ", Alt: " + std::to_string(current_altitude_) +
-                ", Target: " + std::to_string(target_altitude_) +
-                ", Armed: " + std::to_string(armed_) +
-                ", State: " + std::to_string(state_);
+    drone_launch_controller::FlightStatus msg;
+    msg.flight_mode = "";
+    msg.current_altitude = current_alt;
+    msg.target_altitude = 0.0f;
+    msg.latitude = 0.0f;
+    msg.longitude = 0.0f;
+    msg.armed = 0;
+    msg.state = static_cast<uint8_t>(state);
+    msg.message = "";
     status_pub_.publish(msg);
 }
 

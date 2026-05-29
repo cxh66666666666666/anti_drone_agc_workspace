@@ -11,6 +11,25 @@ find_package(catkin REQUIRED COMPONENTS
   message_generation
 )
 
+add_message_files(
+  FILES
+    FlightStatus.msg
+    DroneHealthStatus.msg
+)
+
+add_service_files(
+  FILES
+    Takeoff.srv
+    ArmMotors.srv
+    DroneHealthCheck.srv
+    ConnectionStatus.srv
+)
+
+generate_messages(
+  DEPENDENCIES
+    std_msgs
+)
+
 catkin_package(
   CATKIN_DEPENDS
     roscpp
@@ -29,9 +48,7 @@ include_directories(
 
 add_executable(drone_launch_controller_node
   src/drone_launch_controller_node.cpp
-  src/drone_connector.cpp
   src/health_checker.cpp
-  src/arm_controller.cpp
   src/takeoff_controller.cpp
   src/flight_status_publisher.cpp
 )

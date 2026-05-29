@@ -1,8 +1,19 @@
+/**
+ * @file health_checker.cpp
+ * @brief 无人机健康检查器类实现
+ * @author 陈鑫豪
+ * @date 2026-05-29
+ */
 #include <drone_launch_controller/health_checker.h>
 
 namespace drone_launch_controller {
 
-HealthChecker::HealthChecker(ros::NodeHandle& nh) : nh_(nh) {
+/**
+ * @brief 无人机健康检查器类构造函数
+ * @param nh ROS节点句柄
+ */
+HealthChecker::HealthChecker(ros::NodeHandle& nh) : nh_(nh) 
+{
     battery_sub_ = nh_.subscribe("/mavros/battery", 10, &HealthChecker::batteryCallback, this);
     gps_sub_ = nh_.subscribe("/mavros/global_position/global", 10, &HealthChecker::gpsCallback, this);
     imu_sub_ = nh_.subscribe("/mavros/imu/data", 10, &HealthChecker::imuCallback, this);
@@ -16,39 +27,77 @@ HealthChecker::HealthChecker(ros::NodeHandle& nh) : nh_(nh) {
     esc_ok_ = false;
 }
 
-void HealthChecker::batteryCallback(const sensor_msgs::BatteryState::ConstPtr& msg) {
+/**
+ * @brief 电池状态回调函数
+ * @param msg 电池状态消息指针
+ */
+void HealthChecker::batteryCallback(const sensor_msgs::BatteryState::ConstPtr& msg) 
+{
     battery_state_ = *msg;
 }
 
-void HealthChecker::gpsCallback(const sensor_msgs::NavSatFix::ConstPtr& msg) {
+/**
+ * @brief GPS状态回调函数
+ * @param msg GPS状态消息指针
+ */
+void HealthChecker::gpsCallback(const sensor_msgs::NavSatFix::ConstPtr& msg) 
+{
     gps_state_ = *msg;
 }
 
-void HealthChecker::imuCallback(const sensor_msgs::Imu::ConstPtr& msg) {
+/**
+ * @brief IMU状态回调函数
+ * @param msg IMU状态消息指针
+ */
+void HealthChecker::imuCallback(const sensor_msgs::Imu::ConstPtr& msg) 
+{
     imu_state_ = *msg;
 }
 
-void HealthChecker::escCallback(const mavros_msgs::ESCStatus::ConstPtr& msg) {
+/**
+ * @brief ESC状态回调函数
+ * @param msg ESC状态消息指针
+ */
+void HealthChecker::escCallback(const mavros_msgs::ESCStatus::ConstPtr& msg) 
+{
     esc_state_ = *msg;
 }
 
-float HealthChecker::getBatteryVoltage() {
+/**
+ * @brief 获取电池电压
+ * @return 电池电压
+ */
+float HealthChecker::getBatteryVoltage() 
+{
     return battery_state_.voltage;
 }
 
-float HealthChecker::getBatteryPercentage() {
+/**
+ * @brief 获取电池百分比
+ * @return 电池百分比
+ */
+float HealthChecker::getBatteryPercentage() 
+{
     return battery_state_.percentage * 100.0f;
 }
 
-bool HealthChecker::checkBattery() {
-    if (battery_state_.voltage < 3.3f) {
-        ROS_ERROR("Battery voltage too low: %.2fV (threshold: 3.3V)", battery_state_.voltage);
+/**
+ * @brief 检查电池状态
+ * @details 检查电池电压和百分比是否在正常范围内，默认阈值为3.3V和20%。
+ * @return true 如果电池状态正常，否则返回 false
+ */
+bool HealthChecker::checkBattery() 
+{
+    if (battery_state_.voltage < 3.3f) 
+    {
+        ROS_ERROR("[HealthChecker] 电池电压过低: %.2fV (阈值: 3.3V)", battery_state_.voltage);
         battery_ok_ = false;
         return false;
     }
 
-    if (battery_state_.percentage < 0.2f) {
-        ROS_ERROR("Battery percentage too low: %.1f%% (threshold: 20%%)", battery_state_.percentage * 100.0f);
+    if (battery_state_.percentage < 0.2f) 
+    {
+        ROS_ERROR("[HealthChecker] 电池百分比过低: %.1f%% (阈值: 20%%)", battery_state_.percentage * 100.0f);
         battery_ok_ = false;
         return false;
     }
@@ -57,15 +106,23 @@ bool HealthChecker::checkBattery() {
     return true;
 }
 
-bool HealthChecker::checkGPS() {
-    if (gps_state_.status.status < 0) {
-        ROS_ERROR("GPS not fixed - status: %d", gps_state_.status.status);
+/**
+ * @brief 检查GPS状态
+ * @details 检查GPS状态是否固定且服务是否可用。
+ * @return true 如果GPS状态正常，否则返回 false
+ */
+bool HealthChecker::checkGPS() 
+{
+    if (gps_state_.status.status < 0) 
+    {
+        ROS_ERROR("[HealthChecker] GPS状态异常 - 状态: %d", gps_state_.status.status);
         gps_ok_ = false;
         return false;
     }
 
-    if (gps_state_.status.service <= 0) {
-        ROS_ERROR("GPS service not available - service: %d", gps_state_.status.service);
+    if (gps_state_.status.service <= 0) 
+    {
+        ROS_ERROR("[HealthChecker] GPS服务异常 - 服务: %d", gps_state_.status.service);
         gps_ok_ = false;
         return false;
     }
@@ -74,19 +131,29 @@ bool HealthChecker::checkGPS() {
     return true;
 }
 
-bool HealthChecker::checkIMU() {
+/**
+ * @brief 检查IMU状态
+ * @details 检查IMU数据是否有效。
+ * @return true 如果IMU状态正常，否则返回 false
+ * @note ROS约定：协方差数组首元素为负表示数据不可靠，0表示数据有效
+ */
+bool HealthChecker::checkIMU()
+{
+    
     if (!imu_state_.header.stamp.isZero() &&
         (imu_state_.orientation_covariance[0] < 0 ||
          imu_state_.angular_velocity_covariance[0] < 0 ||
-         imu_state_.linear_acceleration_covariance[0] < 0)) {
-        ROS_ERROR("IMU data invalid - covariance values indicate no data");
+         imu_state_.linear_acceleration_covariance[0] < 0)) 
+    {
+        ROS_ERROR("[HealthChecker] IMU数据无效 - 协方差值指示无数据");
         imu_ok_ = false;
         return false;
     }
 
     ros::Duration imu_age = ros::Time::now() - imu_state_.header.stamp;
-    if (imu_age > ros::Duration(1.0)) {
-        ROS_ERROR("IMU data too old: %.2f seconds", imu_age.toSec());
+    if (imu_age > ros::Duration(1.0)) 
+    {
+        ROS_ERROR("[HealthChecker] IMU数据过期 - 时间间隔: %.2f秒", imu_age.toSec());
         imu_ok_ = false;
         return false;
     }
@@ -95,38 +162,26 @@ bool HealthChecker::checkIMU() {
     return true;
 }
 
-bool HealthChecker::checkBarometer() {
-    if (imu_state_.header.stamp.isZero()) {
-        ROS_ERROR("Barometer data not available");
-        baro_ok_ = false;
-        return false;
-    }
-
-    baro_ok_ = true;
-    return true;
-}
-
-bool HealthChecker::checkMagnetometer() {
-    if (imu_state_.header.stamp.isZero()) {
-        ROS_ERROR("Magnetometer data not available");
-        mag_ok_ = false;
-        return false;
-    }
-
-    mag_ok_ = true;
-    return true;
-}
-
-bool HealthChecker::checkESCs() {
-    if (esc_state_.esc_status.empty()) {
-        ROS_WARN("No ESC status data received");
+/**
+ * @brief 检查ESC状态
+ * @details 检查ESC状态是否正常，即电压是否在正常范围内。
+ * @return true 如果ESC状态正常，否则返回 false
+ * @note ROS约定：ESC电压阈值为0.0V
+ */
+bool HealthChecker::checkESCs() 
+{
+    if (esc_state_.esc_status.empty()) 
+    {
+        ROS_WARN("[HealthChecker] ESC状态数据为空");
         esc_ok_ = false;
         return false;
     }
 
-    for (const auto& esc : esc_state_.esc_status) {
-        if (esc.voltage <= 0.0f) {
-            ROS_WARN("ESC has low voltage: %.2f", esc.voltage);
+    for (const auto& esc : esc_state_.esc_status) 
+    {
+        if (esc.voltage <= 0.0f) 
+        {
+            ROS_WARN("[HealthChecker] ESC电压过低: %.2fV", esc.voltage);
         }
     }
 
@@ -134,27 +189,47 @@ bool HealthChecker::checkESCs() {
     return true;
 }
 
-DroneHealthStatus HealthChecker::performFullCheck() {
+/**
+ * @brief 执行完整的健康检查
+ * @details 执行完整的健康检查，包括电池、GPS、IMU、气压计/磁力计（通过IMU数据新鲜度判断）和ESC状态。
+ * @return 无人机健康状态结构体
+ */
+DroneHealthStatus HealthChecker::performFullCheck() 
+{
     DroneHealthStatus status;
     status.drone_name = "anti_drone";
     status.error_code = 0;
 
-    if (!checkBattery()) {
+    if (!checkBattery()) 
+    {
         status.error_code |= 0x01;
     }
-    if (!checkGPS()) {
+    if (!checkGPS()) 
+    {
         status.error_code |= 0x02;
     }
-    if (!checkIMU()) {
+    if (!checkIMU()) 
+    {
         status.error_code |= 0x04;
     }
-    if (!checkBarometer()) {
+    if (!imu_state_.header.stamp.isZero()) {
+        baro_ok_ = true;
+        mag_ok_ = true;
+    } else {
+        ROS_ERROR("[HealthChecker] IMU数据时间戳无效，气压计/磁力计数据不可用");
+        baro_ok_ = false;
+        mag_ok_ = false;
+    }
+    if (!baro_ok_) 
+    {
         status.error_code |= 0x08;
     }
-    if (!checkMagnetometer()) {
+    if (!mag_ok_) 
+    {
         status.error_code |= 0x10;
     }
-    if (!checkESCs()) {
+    if (!checkESCs()) 
+    {
         status.error_code |= 0x20;
     }
 
@@ -166,10 +241,12 @@ DroneHealthStatus HealthChecker::performFullCheck() {
     status.magnetometer_status = mag_ok_;
     status.esc_status = esc_ok_;
 
-    if (status.error_code == 0) {
-        status.status_message = "All health checks passed";
-        ROS_INFO("Full health check passed");
-    } else {
+    if (status.error_code == 0) 
+    {
+        status.status_message = "所有健康检查通过";
+        ROS_INFO("[HealthChecker] 所有健康检查通过");
+    } else 
+    {
         std::string failed_items;
         if (!battery_ok_) failed_items += "Battery ";
         if (!gps_ok_) failed_items += "GPS ";
@@ -177,8 +254,8 @@ DroneHealthStatus HealthChecker::performFullCheck() {
         if (!baro_ok_) failed_items += "Barometer ";
         if (!mag_ok_) failed_items += "Magnetometer ";
         if (!esc_ok_) failed_items += "ESC ";
-        status.status_message = "Health check failed: " + failed_items;
-        ROS_ERROR("Health check failed: %s", failed_items.c_str());
+        status.status_message = "健康检查失败: " + failed_items;
+        ROS_ERROR("[HealthChecker] 健康检查失败: %s", failed_items.c_str());
     }
 
     return status;
