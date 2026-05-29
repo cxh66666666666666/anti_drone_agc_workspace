@@ -4,7 +4,6 @@
  * @details 该类负责控制无人机的电机解锁与上锁，包括检查安全检查（地理围栏、高度限制、速度限制等）。
  * @author 陈鑫豪
  * @date 2026-05-27
- * @version 0.1
  * @note 该类依赖于Mavros消息类型和ROS服务客户端。
  */
 #ifndef ARM_CONTROLLER_H

@@ -60,7 +60,8 @@ private:
     bool sendSetpointsBeforeOffboard(double duration_seconds, double rate_hz) {
         ROS_INFO("[Setpoint Pre-send] Starting to send setpoints for %.1f seconds at %.1f Hz...", duration_seconds, rate_hz);
         
-        if (!pose_received_) {
+        if (!pose_received_) 
+        {
             ROS_ERROR("[Setpoint Pre-send] No local position received yet! Cannot send setpoints.");
             return false;
         }
