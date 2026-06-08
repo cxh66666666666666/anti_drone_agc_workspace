@@ -1,0 +1,89 @@
+# LQR轨迹跟踪器 — 默认参数配置
+# 加载方式: launch 中通过 <rosparam file="$(find lqr_trajectory_tracker)/config/default_params.yaml"/>
+#
+# 所有参数均加载到节点私有命名空间 /lqr_tracker_node/
+# 可通过 launch 命令行覆盖，例如: roslaunch ... trajectory_type:=linear
+
+# ============================================================
+# 1. 控制参数
+# ============================================================
+# 轨迹类型: linear | circular | helical | fixed_horizontal
+trajectory_type: "fixed_horizontal"
+
+# 轨迹总时长 [秒]
+trajectory_duration: 30.0
+
+# 控制频率 [Hz]
+control_rate: 50.0
+
+
+# ============================================================
+# 2. LQR 控制器权重
+# ============================================================
+# XY 平面位置误差权重 (越大跟踪越紧)
+q_pos_xy: 10.0
+
+# Z 轴位置误差权重
+q_pos_z: 15.0
+
+# XY 平面速度误差权重
+q_vel_xy: 1.0
+
+# Z 轴速度误差权重
+q_vel_z: 2.0
+
+# 加速度控制量权重 (越大控制越平滑)
+r_accel: 0.1
+
+
+# ============================================================
+# 3. 直线轨迹参数 (trajectory_type=linear)
+# ============================================================
+# 起始点 [m]
+start_x: 0.0
+start_y: 0.0
+start_z: 2.0
+
+# 终点 [m]
+end_x: 10.0
+end_y: 0.0
+end_z: 5.0
+
+
+# ============================================================
+# 4. 圆形/螺旋轨迹参数 (trajectory_type=circular | helical)
+# ============================================================
+# 圆心 [m]
+center_x: 0.0
+center_y: 0.0
+center_z: 5.0
+
+# 圆半径 [m]
+radius: 3.0
+
+# 飞行高度 [m] (螺旋时为结束高度)
+height: 5.0
+
+# 角速度 [rad/s]
+angular_velocity: 0.3
+
+
+# ============================================================
+# 5. 固定水平8字形轨迹参数 (trajectory_type=fixed_horizontal)
+# ============================================================
+# 左圆圆心 [m]
+fixed_horizontal_left_x: -3.0
+fixed_horizontal_left_y: 0.0
+
+# 右圆圆心 [m]
+fixed_horizontal_right_x: 3.0
+fixed_horizontal_right_y: 0.0
+
+# 圆半径 [m]
+fixed_horizontal_radius: 3.0
+
+# 飞行高度 [m]
+fixed_horizontal_height: 2.0
+
+# 角速度 [rad/s]
+fixed_horizontal_angular_velocity: 0.5

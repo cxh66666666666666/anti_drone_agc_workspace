@@ -1,3 +1,10 @@
+/**
+ * @file trajectory_generator.h
+ * @brief 轨迹生成器类接口
+ * @author 陈鑫豪
+ * @date 2026-06-08
+ */
+
 #ifndef LQR_TRAJECTORY_TRACKER_TRAJECTORY_GENERATOR_H
 #define LQR_TRAJECTORY_TRACKER_TRAJECTORY_GENERATOR_H
 
@@ -6,62 +13,76 @@
 
 namespace lqr_trajectory_tracker {
 
-// 轨迹类型枚举
+/**
+ * @brief 轨迹类型枚举
+ */
 enum class TrajectoryType {
-    LINEAR,    // 直线轨迹
-    CIRCULAR,  // 圆周轨迹
-    HELICAL,   // 螺旋轨迹
-    RANDOM,    // 随机轨迹
-    FIXED_HORIZONTAL  // 固定水平8字形轨迹
+    LINEAR,
+    CIRCULAR,
+    HELICAL,
+    FIXED_HORIZONTAL
 };
 
-// 固定水平8字形轨迹参数结构体
+/**
+ * @brief 固定水平8字形轨迹参数结构体
+ */
 struct FixedHorizontalParams {
-    double left_center_x = -3.0;   // 左圆圆心X
-    double left_center_y = 0.0;    // 左圆圆心Y
-    double right_center_x = 3.0;   // 右圆圆心X
-    double right_center_y = 0.0;   // 右圆圆心Y
-    double radius = 3.0;           // 圆半径
-    double height = 2.0;           // 固定飞行高度
-    double angular_velocity = 0.5;  // 角速度
+    double left_center_x = -3.0;
+    double left_center_y = 0.0;
+    double right_center_x = 3.0;
+    double right_center_y = 0.0;
+    double radius = 3.0;
+    double height = 2.0;
+    double angular_velocity = 0.5;
 };
 
-// 随机轨迹参数结构体
-struct RandomTrajectoryParams {
-    int num_waypoints = 10;       // 航迹点数量
-    double space_min_x = -20.0;    // 空间范围 X最小值
-    double space_max_x = 20.0;    // 空间范围 X最大值
-    double space_min_y = -20.0;   // 空间范围 Y最小值
-    double space_max_y = 20.0;    // 空间范围 Y最大值
-    double space_min_z = 2.0;     // 空间范围 Z最小值
-    double space_max_z = 10.0;    // 空间范围 Z最大值
-    double max_velocity = 5.0;     // 最大速度 m/s
-    bool closed_loop = false;      // 是否闭合轨迹
-    int seed = 42;                // 随机种子，0表示每次不同
-};
-
-// 轨迹点结构体，包含时间戳、位置、速度和加速度信息
+/**
+ * @brief 轨迹点结构体，包含时间戳、位置、速度和加速度信息
+ */
 struct TrajectoryPoint {
-    double timestamp;       // 时间戳
-    Eigen::Vector3d position;      // 位置
-    Eigen::Vector3d velocity;       // 速度
-    Eigen::Vector3d acceleration;  // 加速度
+    double timestamp;
+    Eigen::Vector3d position;
+    Eigen::Vector3d velocity;
+    Eigen::Vector3d acceleration;
 };
 
-// 轨迹生成器类，用于生成直线、圆周和螺旋轨迹
 class TrajectoryGenerator {
 public:
+
+    /**
+     * @brief 构造函数
+     */
     TrajectoryGenerator();
+    
+    /**
+     * @brief 析构函数
+     */
     ~TrajectoryGenerator();
 
-    // 生成直线轨迹
+    /**
+     * @brief 生成直线轨迹
+     * @param start 起始点
+     * @param end 结束点
+     * @param duration 轨迹持续时间
+     * @param dt 时间步长
+     * @return std::vector<TrajectoryPoint> 直线轨迹点向量
+     */
     std::vector<TrajectoryPoint> generateLinearTrajectory(
         const Eigen::Vector3d& start,
         const Eigen::Vector3d& end,
         double duration,
         double dt);
 
-    // 生成圆周轨迹
+    /**
+     * @brief 生成圆周轨迹
+     * @param center 圆心
+     * @param radius 半径
+     * @param height 高度
+     * @param angular_velocity 角速度
+     * @param duration 轨迹持续时间
+     * @param dt 时间步长
+     * @return std::vector<TrajectoryPoint> 圆周轨迹点向量
+     */
     std::vector<TrajectoryPoint> generateCircularTrajectory(
         const Eigen::Vector3d& center,
         double radius,
@@ -70,7 +91,17 @@ public:
         double duration,
         double dt);
 
-    // 生成螺旋轨迹
+    /**
+     * @brief 生成螺旋轨迹
+     * @param center 螺旋中心
+     * @param radius 螺旋轨迹半径
+     * @param height_start 螺旋轨迹起高度
+     * @param height_end 螺旋轨迹终高度
+     * @param angular_velocity 螺旋轨迹角速度
+     * @param duration 轨迹持续时间
+     * @param dt 时间步长
+     * @return std::vector<TrajectoryPoint> 螺旋轨迹点向量
+     */
     std::vector<TrajectoryPoint> generateHelicalTrajectory(
         const Eigen::Vector3d& center,
         double radius,
@@ -80,23 +111,33 @@ public:
         double duration,
         double dt);
 
-    // 生成随机轨迹
-    std::vector<TrajectoryPoint> generateRandomTrajectory(
-        const RandomTrajectoryParams& params,
-        double duration,
-        double dt);
-
-    // 生成固定水平8字形轨迹
+    /**
+     * @brief 生成固定水平8字形轨迹
+     * @param params 固定水平8字形轨迹参数
+     * @param duration 轨迹持续时间
+     * @param dt 时间步长
+     * @return std::vector<TrajectoryPoint> 固定水平8字形轨迹点向量
+     */
     std::vector<TrajectoryPoint> generateFixedHorizontalTrajectory(
         const FixedHorizontalParams& params,
         double duration,
         double dt);
 
-    // 根据时间获取轨迹上的点
+    /**
+     * @brief 根据时间获取轨迹上的点
+     * @param trajectory 轨迹点向量
+     * @param time 时间戳
+     * @return TrajectoryPoint 轨迹点
+     */
     TrajectoryPoint getPointAtTime(const std::vector<TrajectoryPoint>& trajectory, double time) const;
 
 private:
-    // 计算速度剖面
+    /**
+     * @brief 计算速度剖面
+     * @param t 时间戳
+     * @param duration 轨迹持续时间
+     * @return double 速度剖面
+     */
     double computeVelocityProfile(double t, double duration) const;
 };
 

@@ -11,6 +11,7 @@
 #include <ros/ros.h>
 #include <drone_launch_controller/FlightStatus.h>
 #include <drone_launch_controller/takeoff_controller.h>
+#include <mavros_msgs/State.h>
 
 namespace drone_launch_controller {
 
@@ -20,8 +21,10 @@ public:
      * @brief 构造函数
      * @param nh ROS节点句柄
      * @param takeoff_controller 无人机起飞控制器指针
+     * @param state_ptr MAVROS状态指针（用于获取flight_mode和armed状态）
      */
-    explicit FlightStatusPublisher(ros::NodeHandle& nh, TakeoffController* takeoff_controller);
+    explicit FlightStatusPublisher(ros::NodeHandle& nh, TakeoffController* takeoff_controller,
+                                   const mavros_msgs::State* state_ptr = nullptr);
     /**
      * @brief 析构函数
      */
@@ -51,6 +54,7 @@ private:
     ros::Timer publish_timer_;
 
     TakeoffController* takeoff_controller_;
+    const mavros_msgs::State* state_ptr_;
 
     bool publishing_;
 };

@@ -14,9 +14,11 @@ namespace drone_launch_controller {
  * @param nh ROS节点句柄
  * @param takeoff_controller 无人机起飞控制器指针
  */
-FlightStatusPublisher::FlightStatusPublisher(ros::NodeHandle& nh, TakeoffController* takeoff_controller)
+FlightStatusPublisher::FlightStatusPublisher(ros::NodeHandle& nh, TakeoffController* takeoff_controller,
+                                           const mavros_msgs::State* state_ptr)
     : nh_(nh)
     , takeoff_controller_(takeoff_controller)
+    , state_ptr_(state_ptr)
     , publishing_(false)
 {
     status_pub_ = nh_.advertise<drone_launch_controller::FlightStatus>("/drone_launch_controller/flight_status", 10);
@@ -76,12 +78,20 @@ void FlightStatusPublisher::publishTimerCallback(const ros::TimerEvent& event)
     }
 
     drone_launch_controller::FlightStatus msg;
-    msg.flight_mode = "";
+    if (state_ptr_ != nullptr) 
+    {
+        msg.flight_mode = state_ptr_->mode;
+        msg.armed = state_ptr_->armed ? 1 : 0;
+    }
+    else
+    {
+        msg.flight_mode = "";
+        msg.armed = 0;
+    }
     msg.current_altitude = current_alt;
     msg.target_altitude = 0.0f;
     msg.latitude = 0.0f;
     msg.longitude = 0.0f;
-    msg.armed = 0;
     msg.state = static_cast<uint8_t>(state);
     msg.message = "";
     status_pub_.publish(msg);

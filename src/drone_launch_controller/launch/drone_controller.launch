@@ -9,6 +9,8 @@
     <arg name="status_publish_rate" default="10.0" doc="Flight status publish rate in Hz"/>
     <arg name="mavros_ns" default="/mavros" doc="MAVROS namespace"/>
 
+    <arg name="verbose" default="false" doc="Enable verbose flight status output to log"/>
+
     <node name="drone_launch_controller"
           pkg="drone_launch_controller"
           type="drone_launch_controller_node"
@@ -34,5 +36,5 @@
 
     <node pkg="rostopic" type="rostopic" name="flight_status_monitor"
           args="echo /drone_launch_controller/flight_status"
-          output="log" if_eq="false"/>
+          output="log" unless="$(arg verbose)"/>
 </launch>

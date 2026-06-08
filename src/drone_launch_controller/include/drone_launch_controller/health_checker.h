@@ -107,8 +107,6 @@ private:
     bool battery_ok_;
     bool gps_ok_;
     bool imu_ok_;
-    bool baro_ok_;
-    bool mag_ok_;
     bool esc_ok_;
 };
 

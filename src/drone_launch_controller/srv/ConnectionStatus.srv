@@ -1,4 +1,4 @@
 ---
 bool connected
-uint8 system_id
+uint8 system_status
 string message

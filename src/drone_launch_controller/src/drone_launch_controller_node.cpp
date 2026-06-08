@@ -17,7 +17,7 @@ namespace drone_launch_controller {
 DroneLaunchControllerNode::DroneLaunchControllerNode()
     : nh_("~")
     , takeoff_controller_(&current_pose_, local_pos_pub_, pose_mutex_)
-    , status_publisher_(nh_, &takeoff_controller_)
+    , status_publisher_(nh_, &takeoff_controller_, &current_state_)
     , health_checker_(nh_)
 {
     state_sub_ = nh_.subscribe("/mavros/state", 10, &DroneLaunchControllerNode::stateCallback, this);
@@ -507,7 +507,7 @@ bool DroneLaunchControllerNode::connectionStatusCallback(drone_launch_controller
                                drone_launch_controller::ConnectionStatus::Response& res) 
 {
     res.connected = current_state_.connected;
-    res.system_id = current_state_.system_status;
+    res.system_status = current_state_.system_status;
     if (current_state_.connected) 
     {
         res.message = "已连接 -模式: " + current_state_.mode +

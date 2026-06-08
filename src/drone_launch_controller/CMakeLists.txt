@@ -7,7 +7,6 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   sensor_msgs
   mavros_msgs
-  std_srvs
   message_generation
 )
 
@@ -37,7 +36,6 @@ catkin_package(
     geometry_msgs
     sensor_msgs
     mavros_msgs
-    std_srvs
     message_runtime
 )
 

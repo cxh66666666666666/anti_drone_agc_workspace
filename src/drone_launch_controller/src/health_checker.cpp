@@ -22,8 +22,6 @@ HealthChecker::HealthChecker(ros::NodeHandle& nh) : nh_(nh)
     battery_ok_ = false;
     gps_ok_ = false;
     imu_ok_ = false;
-    baro_ok_ = false;
-    mag_ok_ = false;
     esc_ok_ = false;
 }
 
@@ -212,33 +210,17 @@ DroneHealthStatus HealthChecker::performFullCheck()
     {
         status.error_code |= 0x04;
     }
-    if (!imu_state_.header.stamp.isZero()) {
-        baro_ok_ = true;
-        mag_ok_ = true;
-    } else {
-        ROS_ERROR("[HealthChecker] IMU数据时间戳无效，气压计/磁力计数据不可用");
-        baro_ok_ = false;
-        mag_ok_ = false;
-    }
-    if (!baro_ok_) 
-    {
-        status.error_code |= 0x08;
-    }
-    if (!mag_ok_) 
-    {
-        status.error_code |= 0x10;
-    }
     if (!checkESCs()) 
     {
-        status.error_code |= 0x20;
+        status.error_code |= 0x08;
     }
 
     status.battery_voltage = getBatteryVoltage();
     status.battery_percentage = getBatteryPercentage();
     status.gps_status = gps_ok_;
     status.imu_status = imu_ok_;
-    status.barometer_status = baro_ok_;
-    status.magnetometer_status = mag_ok_;
+    status.barometer_status = false;
+    status.magnetometer_status = false;
     status.esc_status = esc_ok_;
 
     if (status.error_code == 0) 
@@ -251,8 +233,6 @@ DroneHealthStatus HealthChecker::performFullCheck()
         if (!battery_ok_) failed_items += "Battery ";
         if (!gps_ok_) failed_items += "GPS ";
         if (!imu_ok_) failed_items += "IMU ";
-        if (!baro_ok_) failed_items += "Barometer ";
-        if (!mag_ok_) failed_items += "Magnetometer ";
         if (!esc_ok_) failed_items += "ESC ";
         status.status_message = "健康检查失败: " + failed_items;
         ROS_ERROR("[HealthChecker] 健康检查失败: %s", failed_items.c_str());

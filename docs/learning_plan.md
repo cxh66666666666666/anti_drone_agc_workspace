@@ -25,15 +25,6 @@
 - 控制系统工程化，不只是算法本身
 - 参数化 launch 和实验复现方法
 
-**阶段产出文件**
-
-- `docs/subsystem_refactor_plan.md`
-- `docs/drone_controller_api.md`
-- `docs/lqr_tracker_api.md`
-- `docs/ground_vehicle_control_api.md`
-- `scripts/run_takeoff_demo.sh`
-- `scripts/run_lqr_demo.sh`
-
 **完成标准**
 
 - 每个核心包的输入输出可以一页纸说清楚
@@ -78,14 +69,6 @@
 - ROS 系统架构设计
 - 异常流程处理
 
-**阶段产出文件**
-
-- `docs/system_architecture_v1.md`
-- `docs/mission_state_machine.md`
-- `docs/coordination_interfaces.md`
-- `src/air_ground_core/src/mission_manager.cpp` 或等价任务节点
-- `launch/system_demo.launch`
-
 **完成标准**
 
 - 系统存在一个统一的“主流程”
@@ -121,14 +104,6 @@
 - 实验设计
 - 误差指标定义
 - 数据记录与可视化
-
-**阶段产出文件**
-
-- `docs/lqr_experiment_design.md`
-- `docs/lqr_result_analysis.md`
-- `results/lqr/`
-- `scripts/run_lqr_experiments.sh`
-- `scripts/analyze_trajectory.py` 的增强版结果输出
 
 **完成标准**
 
@@ -167,13 +142,6 @@
 - LOAM 输入输出链路
 - 感知结果如何进入任务决策
 
-**阶段产出文件**
-
-- `docs/perception_pipeline.md`
-- `docs/tf_tree_design.md`
-- `docs/slam_integration_plan.md`
-- `launch/perception_demo.launch`
-
 **完成标准**
 
 - 感知模块在主流程中有明确作用
@@ -201,13 +169,6 @@
 - 结果归档
 - 技术写作
 - 面向答辩/汇报的系统表达
-
-**阶段产出文件**
-
-- `scripts/run_full_demo.sh`
-- `docs/demo_runbook.md`
-- `docs/final_report_outline.md`
-- `results/demo/`
 
 **完成标准**
 
@@ -262,13 +223,6 @@
 3. 整理统一运行命令
 4. 输出子系统 API 文档
 
-**产出**
-
-- `docs/drone_controller_api.md`
-- `docs/lqr_tracker_api.md`
-- `docs/ground_vehicle_control_api.md`
-- `docs/subsystem_refactor_plan.md`
-
 ### 第 2 周：做任务调度层原型
 
 **重点任务**
@@ -277,13 +231,6 @@
 2. 实现最小 mission manager
 3. 打通“地面车启动 + 无人机起飞 + 轨迹跟踪”
 
-**产出**
-
-- `docs/system_architecture_v1.md`
-- `docs/mission_state_machine.md`
-- `launch/system_demo.launch`
-- `src/air_ground_core/src/mission_manager.cpp` 或等价实现
-
 ### 第 3 周：做 LQR 实验闭环
 
 **重点任务**
@@ -291,12 +238,6 @@
 1. 固化实验场景
 2. 输出参数对比
 3. 整理结果和图表
-
-**产出**
-
-- `docs/lqr_experiment_design.md`
-- `docs/lqr_result_analysis.md`
-- `results/lqr/`
 
 ---
 
