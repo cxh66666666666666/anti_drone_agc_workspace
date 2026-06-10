@@ -32,9 +32,13 @@
         <remap from="/mavros/local_position/pose" to="$(arg mavros_ns)/local_position/pose"/>
         <remap from="/mavros/set_mode" to="$(arg mavros_ns)/set_mode"/>
         <remap from="/drone_launch_controller/flight_status" to="/drone_launch_controller/flight_status"/>
+
+        <env name="ROSCONSOLE_CONFIG_FILE" value="$(find drone_launch_controller)/config/rosconsole.config"/>
     </node>
 
     <node pkg="rostopic" type="rostopic" name="flight_status_monitor"
           args="echo /drone_launch_controller/flight_status"
-          output="log" unless="$(arg verbose)"/>
+          output="log" unless="$(arg verbose)">
+        <env name="ROSCONSOLE_CONFIG_FILE" value="$(find drone_launch_controller)/config/rosconsole.config"/>
+    </node>
 </launch>

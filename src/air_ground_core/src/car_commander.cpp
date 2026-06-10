@@ -1,7 +1,9 @@
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
+#include <clocale>
 
 int main(int argc, char **argv) {
+    setlocale(LC_ALL, "");
     // 1. 初始化 ROS 节点，命名为 car_commander
     ros::init(argc, argv, "car_commander");
     ros::NodeHandle nh;

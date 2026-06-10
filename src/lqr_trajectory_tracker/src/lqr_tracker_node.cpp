@@ -4,6 +4,7 @@
  * @author 陈鑫豪
  * @date 2026-06-04
  */
+#include <clocale>
 #include "lqr_trajectory_tracker/lqr_tracker_node.h"
 #include <ros/ros.h>
 #include <geometry_msgs/AccelStamped.h>
@@ -25,6 +26,8 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     , pnh_(pnh)
     , has_state_(false)
     , has_mavros_state_(false)
+    , rl_offset_(0.0, 0.0, 0.0)
+    , has_rl_offset_(false)
     , trajectory_duration_(10.0)
     , control_rate_(50.0)
     , dt_(0.02)
@@ -47,15 +50,29 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     
     pose_sub_ = nh_.subscribe("/mavros/local_position/pose", 10, &LQRTrackerNode::poseCallback, this);
     state_sub_ = nh_.subscribe("/mavros/state", 10, &LQRTrackerNode::stateCallback, this);
+    local_offset_sub_ = nh_.subscribe("/rl_planner/local_offset", 10, &LQRTrackerNode::localOffsetCallback, this);
     
     pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
     accel_pub_ = nh_.advertise<geometry_msgs::AccelStamped>("/lqr_tracker/accel_cmd", 10);
     ref_path_pub_ = nh_.advertise<nav_msgs::Path>("/lqr_tracker/ref_trajectory", 10);
+    flown_path_pub_ = nh_.advertise<visualization_msgs::Marker>("/lqr_tracker/flown_path", 10);
     pos_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/position_error", 10);
     vel_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/velocity_error", 10);
     total_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/total_error", 10);
     
     generateTrajectory();
+
+    // 初始化飞行轨迹 Marker（LINE_STRIP，红色）
+    flown_path_marker_.header.frame_id = "map";
+    flown_path_marker_.ns = "flown_path";
+    flown_path_marker_.type = visualization_msgs::Marker::LINE_STRIP;
+    flown_path_marker_.action = visualization_msgs::Marker::ADD;
+    flown_path_marker_.scale.x = 0.1;  // 线宽
+    flown_path_marker_.color.r = 1.0;
+    flown_path_marker_.color.g = 0.0;
+    flown_path_marker_.color.b = 0.0;
+    flown_path_marker_.color.a = 1.0;
+    flown_path_marker_.lifetime = ros::Duration(0);  // 永久显示
     
     // 配置LQR位置权重矩阵
     Eigen::Matrix3d q_pos = Eigen::Matrix3d::Zero();
@@ -92,6 +109,7 @@ LQRTrackerNode::~LQRTrackerNode() {}
  */
 void LQRTrackerNode::loadParameters() 
 {
+    // 轨迹类型: linear | circular | helical | fixed_horizontal
     pnh_.param<std::string>("trajectory_type", trajectory_type_, "fixed_horizontal");
     pnh_.param<double>("trajectory_duration", trajectory_duration_, 30.0);
     pnh_.param<double>("control_rate", control_rate_, 50.0);
@@ -188,6 +206,15 @@ void LQRTrackerNode::stateCallback(const mavros_msgs::State::ConstPtr& msg)
 {
     mavros_state_ = *msg;
     has_mavros_state_ = true;
+}
+
+/**
+ * @brief 订阅rl_planner局部避障偏移量，回调更新参考轨迹修正量
+ */
+void LQRTrackerNode::localOffsetCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg) 
+{
+    rl_offset_ = Eigen::Vector3d(msg->vector.x, msg->vector.y, msg->vector.z);
+    has_rl_offset_ = true;
 }
 
 /**
@@ -399,8 +426,13 @@ void LQRTrackerNode::trackingLoop()
             }
         }
         
-        // 获取当前参考轨迹点
+        // 获取基础参考轨迹点。RL只提供局部避障偏移，不替代基础轨迹。
         TrajectoryPoint ref_point = traj_generator_.getPointAtTime(trajectory_, elapsed);
+
+        if (has_rl_offset_)
+        {
+            ref_point.position += rl_offset_;
+        }
         
         // 使用LQR计算控制指令
         Eigen::Vector3d desired_position = computeLQRControl(current_state_, ref_point);
@@ -422,6 +454,15 @@ void LQRTrackerNode::trackingLoop()
                      current_error.position_error);
         }
         
+        // 更新飞行轨迹 Marker，追加当前位置
+        geometry_msgs::Point pt;
+        pt.x = current_state_.position.x();
+        pt.y = current_state_.position.y();
+        pt.z = current_state_.position.z();
+        flown_path_marker_.points.push_back(pt);
+        flown_path_marker_.header.stamp = ros::Time::now();
+        flown_path_pub_.publish(flown_path_marker_);
+
         rate.sleep();
     }
     
@@ -461,6 +502,7 @@ void LQRTrackerNode::run() {
 
 int main(int argc, char** argv) 
 {
+    setlocale(LC_ALL, "");
     ros::init(argc, argv, "lqr_tracker_node");
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");

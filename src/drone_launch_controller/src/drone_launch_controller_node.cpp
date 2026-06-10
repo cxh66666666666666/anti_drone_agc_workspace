@@ -4,6 +4,7 @@
  * @author 陈鑫豪
  * @date 2026-05-29
  */
+#include <clocale>
 #include <drone_launch_controller/drone_launch_controller.h>
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/CommandBool.h>
@@ -525,6 +526,7 @@ bool DroneLaunchControllerNode::connectionStatusCallback(drone_launch_controller
 
 int main(int argc, char** argv) 
 {
+    setlocale(LC_ALL, "");
     ros::init(argc, argv, "drone_launch_controller");
     ROS_INFO("========================================");
     ROS_INFO("[DroneLaunchControllerNode] 无人机起飞控制器节点已启动");
