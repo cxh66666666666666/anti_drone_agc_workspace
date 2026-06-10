@@ -10,6 +10,8 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/Vector3Stamped.h>
+#include <visualization_msgs/Marker.h>
 #include <mavros_msgs/State.h>
 
 #include "lqr_trajectory_tracker/lqr_controller.h"
@@ -53,6 +55,11 @@ private:
      * @brief 回调函数：处理无人机状态订阅消息
      */
     void stateCallback(const mavros_msgs::State::ConstPtr& msg);
+
+    /**
+     * @brief 回调函数：处理强化学习局部避障偏移量
+     */
+    void localOffsetCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg);
 
     /**
      * @brief 发布函数：发布轨迹可视化数据
@@ -104,11 +111,13 @@ private:
 
     ros::Subscriber pose_sub_;
     ros::Subscriber state_sub_;
+    ros::Subscriber local_offset_sub_;
 
     // 发布者：发送控制指令和可视化数据
     ros::Publisher pos_pub_;
     ros::Publisher accel_pub_;
     ros::Publisher ref_path_pub_;
+    ros::Publisher flown_path_pub_;
     ros::Publisher pos_error_pub_;
     ros::Publisher vel_error_pub_;
     ros::Publisher total_error_pub_;
@@ -124,6 +133,13 @@ private:
     bool has_state_;
     bool has_mavros_state_;
     mavros_msgs::State mavros_state_;
+
+    // 强化学习局部避障偏移量
+    Eigen::Vector3d rl_offset_;
+    bool has_rl_offset_;
+
+    // 飞行轨迹可视化
+    visualization_msgs::Marker flown_path_marker_;
 
     // 轨迹参数
     std::string trajectory_type_;

@@ -1,0 +1,12 @@
+<launch>
+    <!-- RL规划节点参数 -->
+    <node pkg="rl_obstacle_avoidance"
+          type="rl_planner_node.py"
+          name="rl_planner_node"
+          output="screen">
+        <param name="step_xy" value="1.0" />
+        <param name="step_z" value="0.5" />
+        <param name="min_height" value="1.0" />
+        <param name="safe_distance_norm" value="0.3" />
+    </node>
+</launch>

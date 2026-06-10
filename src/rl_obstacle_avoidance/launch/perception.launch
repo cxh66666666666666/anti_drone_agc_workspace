@@ -1,0 +1,18 @@
+<launch>
+    <!-- 感知节点参数 -->
+    <arg name="num_sectors" default="12" />
+    <arg name="max_range" default="10.0" />
+    <arg name="min_range" default="0.5" />
+    <arg name="safe_height" default="1.5" />
+    
+    <!-- 启动感知节点 -->
+    <node pkg="rl_obstacle_avoidance" 
+          type="perception_node.py" 
+          name="perception_node" 
+          output="screen">
+        <param name="num_sectors" value="$(arg num_sectors)" />
+        <param name="max_range" value="$(arg max_range)" />
+        <param name="min_range" value="$(arg min_range)" />
+        <param name="safe_height" value="$(arg safe_height)" />
+    </node>
+</launch>
