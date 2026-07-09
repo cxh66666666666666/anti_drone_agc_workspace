@@ -12,6 +12,8 @@ ALTITUDE="5.0"
 TIMEOUT="30.0"
 TRAJECTORY="fixed_horizontal"
 WITH_PERCEPTION="false"
+WITH_EXPERIMENT_LOGGER="false"
+OBSTACLE=""       # 障碍物坐标 "x,y,z"，空串表示不添加
 GUI_MODE="true"
 
 # 后台进程PID列表
@@ -33,6 +35,8 @@ show_help() {
     echo "  --altitude <米>        起飞目标高度 (默认: 5.0, 用于 takeoff/lqr 模式)"
     echo "  --trajectory <类型>    轨迹类型 (默认: fixed_horizontal, 仅 lqr 模式)"
     echo "  --with-perception      启动 rl_obstacle_avoidance 感知+规划节点 (仅 lqr 模式)"
+    echo "  --with-experiment-logger  启动实验数据记录节点 (仅 lqr 模式，需配合 --with-perception)"
+    echo "  --obstacle <x,y,z>     在指定坐标 spawn 静态障碍物 (仅 lqr/sim/takeoff 模式)"
     echo "  --headless             禁用 Gazebo GUI，仅运行仿真服务器"
     echo "  -h, --help             显示此帮助"
     echo ""
@@ -40,6 +44,7 @@ show_help() {
     echo "  ./scripts/start_sim.sh sim"
     echo "  ./scripts/start_sim.sh takeoff --altitude 10.0"
     echo "  ./scripts/start_sim.sh lqr --with-perception"
+    echo "  ./scripts/start_sim.sh lqr --with-perception --with-experiment-logger"
     echo "  ./scripts/start_sim.sh perception"
 }
 
@@ -53,6 +58,9 @@ setup_env() {
     source "$WORKSPACE_DIR/devel/setup.bash"
     export ROS_PACKAGE_PATH=$ROS_PACKAGE_PATH:/home/ubuntu/PX4_Firmware:/home/ubuntu/PX4_Firmware/Tools/sitl_gazebo
     export GAZEBO_MODEL_PATH=/home/ubuntu/PX4_Firmware/Tools/sitl_gazebo/models:$GAZEBO_MODEL_PATH
+    # 将 ROS 日志目录指向可写位置（避免 ~/.ros/log/ 只读报错）
+    export ROS_LOG_DIR=/tmp/ros_logs
+    mkdir -p "$ROS_LOG_DIR"
 }
 
 # 清理旧进程
@@ -67,6 +75,7 @@ cleanup_procs() {
     pkill -9 -f lqr_tracker_node 2>/dev/null || true
     pkill -9 -f perception_node 2>/dev/null || true
     pkill -9 -f rl_planner_node 2>/dev/null || true
+    pkill -9 -f experiment_logger_node 2>/dev/null || true
     sleep 2
 }
 
@@ -108,7 +117,7 @@ wait_for_clock() {
 start_px4_sitl() {
     echo "[启动] 启动 PX4 SITL + Gazebo + MAVROS (gui=${GUI_MODE})..."
     cd /home/ubuntu/PX4_Firmware
-    roslaunch px4 mavros_posix_sitl.launch vehicle:=iris gui:=${GUI_MODE} interactive:=false &
+    roslaunch px4 mavros_posix_sitl.launch vehicle:=iris vehicle_sdf:=iris_3d_lidar gui:=${GUI_MODE} interactive:=false &
     PIDS+=($!)
     echo "[启动] PX4 PID: ${PIDS[-1]}"
     cd "$WORKSPACE_DIR"
@@ -202,6 +211,11 @@ run_lqr() {
 
     wait_for_mavros 60
 
+    # 可选: spawn 静态障碍物
+    if [ -n "$OBSTACLE" ]; then
+        spawn_obstacle "$OBSTACLE"
+    fi
+
     # 可选: 启动感知节点
     if [ "$WITH_PERCEPTION" = "true" ]; then
         wait_for_clock 30
@@ -216,6 +230,15 @@ run_lqr() {
         PIDS+=($!)
         echo "[感知] rl_planner_node PID: ${PIDS[-1]}"
         sleep 2
+    fi
+
+    # 可选: 启动实验数据记录节点
+    if [ "$WITH_EXPERIMENT_LOGGER" = "true" ]; then
+        echo "[实验日志] 启动 experiment_logger_node..."
+        roslaunch rl_obstacle_avoidance experiment_logger.launch &
+        PIDS+=($!)
+        echo "[实验日志] experiment_logger_node PID: ${PIDS[-1]}"
+        sleep 1
     fi
 
     # 启动 drone_launch_controller 并起飞
@@ -289,6 +312,34 @@ run_perception() {
     echo "========================================="
 }
 
+# 在 Gazebo 中 spawn 静态障碍物
+spawn_obstacle() {
+    local coords="$1"
+    local x=$(echo "$coords" | cut -d',' -f1)
+    local y=$(echo "$coords" | cut -d',' -f2)
+    local z=$(echo "$coords" | cut -d',' -f3)
+    local name="obstacle_$(date +%s)"
+
+    echo "[障碍物] 在 ($x, $y, $z) 处 spawn 静态障碍物..."
+    echo "
+    <sdf version='1.4'>
+      <model name='$name'>
+        <static>true</static>
+        <link name='link'>
+          <collision name='collision'>
+            <geometry><box><size>0.3 0.3 3</size></box></geometry>
+          </collision>
+          <visual name='visual'>
+            <geometry><box><size>0.3 0.3 3</size></box></geometry>
+            <material><ambient>1 0 0 1</ambient><diffuse>1 0 0 1</diffuse></material>
+          </visual>
+        </link>
+      </model>
+    </sdf>" | rosrun gazebo_ros spawn_model -sdf -stdin -model "$name" -x "$x" -y "$y" -z "$z" && \
+    echo "[障碍物] 已生成，可使用 LiDAR 检测" || \
+    echo "[警告] 障碍物生成失败，请检查 Gazebo 是否已启动"
+}
+
 # ==========================================
 # 信号处理 - Ctrl+C 清理
 # ==========================================
@@ -308,6 +359,7 @@ cleanup_and_exit() {
     pkill -9 -f lqr_tracker_node 2>/dev/null || true
     pkill -9 -f perception_node 2>/dev/null || true
     pkill -9 -f rl_planner_node 2>/dev/null || true
+    pkill -9 -f experiment_logger_node 2>/dev/null || true
     echo "[清理] 已停止"
     exit 0
 }
@@ -344,6 +396,14 @@ while [ $# -gt 0 ]; do
             ;;
         --with-perception)
             WITH_PERCEPTION="true"
+            shift
+            ;;
+        --obstacle)
+            OBSTACLE="$2"
+            shift 2
+            ;;
+        --with-experiment-logger)
+            WITH_EXPERIMENT_LOGGER="true"
             shift
             ;;
         --headless)

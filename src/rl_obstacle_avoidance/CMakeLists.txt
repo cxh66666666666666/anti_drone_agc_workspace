@@ -152,6 +152,7 @@ catkin_install_python(PROGRAMS
   scripts/rl_planner_node.py
   scripts/perception_node.py
   scripts/dqn_agent.py
+  scripts/experiment_logger_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
