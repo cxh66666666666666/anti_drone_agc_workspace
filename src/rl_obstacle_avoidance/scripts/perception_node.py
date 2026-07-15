@@ -9,7 +9,8 @@
 import rospy
 import numpy as np
 import math
-from sensor_msgs.msg import PointCloud2, PointField
+from sensor_msgs.msg import PointCloud2
+from sensor_msgs import point_cloud2
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from rl_obstacle_avoidance.msg import ObstacleFeatures
 
@@ -38,8 +39,8 @@ class PerceptionNode:
 
         # ========== 订阅话题 ==========
         rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback)
-        rospy.Subscriber('mavros/local_position/pose', PoseStamped, self.pose_callback)
-        rospy.Subscriber('mavros/local_position/velocity_local', TwistStamped, self.vel_callback)
+        rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self.pose_callback)
+        rospy.Subscriber('/mavros/local_position/velocity_local', TwistStamped, self.vel_callback)
 
         # ========== 发布话题 ==========
         self.feature_pub = rospy.Publisher('/obstacle_features', ObstacleFeatures, queue_size=1)
@@ -65,44 +66,13 @@ class PerceptionNode:
     @note: PointCloud2的格式通常是 [x, y, z, intensity] 或 [x, y, z]
     """
     def read_pointcloud(self, cloud_msg):
-        fields = cloud_msg.fields
-
-        x_idx = y_idx = z_idx = -1
-        for i, field in enumerate(fields):
-            if field.name == 'x':
-                x_idx = i
-            elif field.name == 'y':
-                y_idx = i
-            elif field.name == 'z':
-                z_idx = i
-
-        if x_idx == -1 or y_idx == -1 or z_idx == -1:
-            rospy.logerr("[perception_node] 点云数据格式错误，缺少x, y, z字段")
-            return None
-
-        point_step = cloud_msg.point_step
-        row_step = cloud_msg.row_step
-
+        gen = point_cloud2.read_points(cloud_msg, field_names=('x', 'y', 'z'), skip_nans=True)
         points = []
-
-        data = np.frombuffer(cloud_msg.data, dtype=np.uint8)
-
-        x_offset = fields[x_idx].offset
-        y_offset = fields[y_idx].offset
-        z_offset = fields[z_idx].offset
-
-        num_points = cloud_msg.width * cloud_msg.height
-
-        for i in range(num_points):
-            offset = i * point_step
-
-            x = np.float32(data[offset + x_offset:offset + x_offset + 4])
-            y = np.float32(data[offset + y_offset:offset + y_offset + 4])
-            z = np.float32(data[offset + z_offset:offset + z_offset + 4])
-
-            points.append([x, y, z])
-        
-        return np.array(points)
+        for p in gen:
+            points.append([p[0], p[1], p[2]])
+        if not points:
+            return np.empty((0, 3), dtype=np.float32)
+        return np.array(points, dtype=np.float32)
 
     """
     @brief: 无人机位姿回调函数
@@ -124,7 +94,7 @@ class PerceptionNode:
     """
     def lidar_to_sector(self, points):
         if points is None or len(points) == 0:
-            return [self.max_range] * self.num_sector
+            return [1.0] * self.num_sector
         
         sectors = [self.max_range] * self.num_sector
 
@@ -139,7 +109,9 @@ class PerceptionNode:
             if abs(z) > self.safe_height:
                 continue
 
-            angle = math.atan2(x, y)
+            # 无人机 FLU 坐标系: x=前, y=左
+            # atan2(y, x) → 0°=正前方(+x), 90°=正左(+y)
+            angle = math.atan2(y, x)
 
             sector_size = 2*math.pi / self.num_sector
             sector_idx = int((angle+math.pi) / sector_size)
@@ -147,7 +119,6 @@ class PerceptionNode:
 
             sectors[sector_idx]=min(sectors[sector_idx], dist_xy)
 
-        # 归一化到0-1之间
         sectors = [s / self.max_range for s in sectors]
 
         return sectors

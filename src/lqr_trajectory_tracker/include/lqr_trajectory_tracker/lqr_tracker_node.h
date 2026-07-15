@@ -117,6 +117,7 @@ private:
     ros::Publisher pos_pub_;
     ros::Publisher accel_pub_;
     ros::Publisher ref_path_pub_;
+    ros::Publisher adjusted_ref_pub_;
     ros::Publisher flown_path_pub_;
     ros::Publisher pos_error_pub_;
     ros::Publisher vel_error_pub_;
@@ -137,6 +138,9 @@ private:
     // 强化学习局部避障偏移量
     Eigen::Vector3d rl_offset_;
     bool has_rl_offset_;
+    ros::Time last_rl_offset_time_;  // 最后收到偏移消息的时间戳，用于超时清零
+    double rl_speed_scale_;   // 障碍物检测时的速度缩放系数（0~1）
+    double rl_velocity_gain_; // 避障偏移量转为速度分量的增益（Hz）
 
     // 飞行轨迹可视化
     visualization_msgs::Marker flown_path_marker_;

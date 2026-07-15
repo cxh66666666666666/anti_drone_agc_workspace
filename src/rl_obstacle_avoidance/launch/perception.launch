@@ -10,6 +10,8 @@
           type="perception_node.py" 
           name="perception_node" 
           output="screen">
+        <!-- Gazebo 模型命名空间：iris_3d_lidar 的 velodyne 数据在 /iris/velodyne_points -->
+        <remap from="/velodyne_points" to="/iris/velodyne_points" />
         <param name="num_sectors" value="$(arg num_sectors)" />
         <param name="max_range" value="$(arg max_range)" />
         <param name="min_range" value="$(arg min_range)" />

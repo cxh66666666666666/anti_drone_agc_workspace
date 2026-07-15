@@ -15,6 +15,7 @@
 #include <drone_launch_controller/DroneHealthCheck.h>
 #include <drone_launch_controller/ArmMotors.h>
 #include <drone_launch_controller/ConnectionStatus.h>
+#include <std_srvs/Trigger.h>
 #include <mavros_msgs/State.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <mutex>
@@ -123,6 +124,12 @@ private:
     bool connectionStatusCallback(drone_launch_controller::ConnectionStatus::Request& req,
                                    drone_launch_controller::ConnectionStatus::Response& res);
 
+    /**
+     * @brief 处理释放控制权请求：停止悬停发布
+     */
+    bool releaseControlCallback(std_srvs::Trigger::Request& req,
+                                std_srvs::Trigger::Response& res);
+
     ros::NodeHandle nh_;
     ros::Subscriber state_sub_;
     ros::Subscriber local_pos_sub_;
@@ -130,6 +137,7 @@ private:
     ros::ServiceServer health_check_service_;
     ros::ServiceServer arm_service_;
     ros::ServiceServer connection_service_;
+    ros::ServiceServer release_control_service_;
 
     ros::ServiceClient set_mode_client_;
     ros::ServiceClient arming_client_;

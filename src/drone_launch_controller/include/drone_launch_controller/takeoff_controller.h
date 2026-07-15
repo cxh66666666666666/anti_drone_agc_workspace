@@ -85,6 +85,11 @@ public:
      */
     void setState(FlightState state);
 
+    /**
+     * @brief 释放控制权：停止悬停发布，将 /mavros/setpoint_position/local 交还给 LQR 跟踪器
+     */
+    void releaseControl();
+
 private:
     /**
      * @brief 起飞循环

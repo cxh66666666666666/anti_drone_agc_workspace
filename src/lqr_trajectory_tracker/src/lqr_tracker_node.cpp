@@ -12,6 +12,7 @@
 #include <std_msgs/Float64.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/ParamSet.h>
+#include <std_srvs/Trigger.h>
 #include <cmath>
 
 namespace lqr_trajectory_tracker {
@@ -28,6 +29,8 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     , has_mavros_state_(false)
     , rl_offset_(0.0, 0.0, 0.0)
     , has_rl_offset_(false)
+    , rl_speed_scale_(0.3)
+    , rl_velocity_gain_(1.0)
     , trajectory_duration_(10.0)
     , control_rate_(50.0)
     , dt_(0.02)
@@ -55,6 +58,7 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
     accel_pub_ = nh_.advertise<geometry_msgs::AccelStamped>("/lqr_tracker/accel_cmd", 10);
     ref_path_pub_ = nh_.advertise<nav_msgs::Path>("/lqr_tracker/ref_trajectory", 10);
+    adjusted_ref_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/lqr_tracker/adjusted_ref", 10);
     flown_path_pub_ = nh_.advertise<visualization_msgs::Marker>("/lqr_tracker/flown_path", 10);
     pos_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/position_error", 10);
     vel_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/velocity_error", 10);
@@ -113,6 +117,8 @@ void LQRTrackerNode::loadParameters()
     pnh_.param<std::string>("trajectory_type", trajectory_type_, "fixed_horizontal");
     pnh_.param<double>("trajectory_duration", trajectory_duration_, 30.0);
     pnh_.param<double>("control_rate", control_rate_, 50.0);
+    pnh_.param<double>("rl_speed_scale", rl_speed_scale_, 0.3);  // 避障时的参考速度缩放系数
+    pnh_.param<double>("rl_velocity_gain", rl_velocity_gain_, 1.0);  // 偏移转速度增益（Hz）
     
     pnh_.param<double>("q_pos_xy", q_pos_xy_, 10.0);
     pnh_.param<double>("q_pos_z", q_pos_z_, 15.0);
@@ -134,7 +140,7 @@ void LQRTrackerNode::loadParameters()
     
     pnh_.param<double>("radius", radius_, 3.0);
     pnh_.param<double>("height", height_, 5.0);
-    pnh_.param<double>("angular_velocity", angular_velocity_, 0.3);
+    pnh_.param<double>("angular_velocity", angular_velocity_, 10);
 
     pnh_.param<double>("fixed_horizontal_left_x", fixed_horizontal_params_.left_center_x, -3.0);
     pnh_.param<double>("fixed_horizontal_left_y", fixed_horizontal_params_.left_center_y, 0.0);
@@ -142,7 +148,7 @@ void LQRTrackerNode::loadParameters()
     pnh_.param<double>("fixed_horizontal_right_y", fixed_horizontal_params_.right_center_y, 0.0);
     pnh_.param<double>("fixed_horizontal_radius", fixed_horizontal_params_.radius, 3.0);
     pnh_.param<double>("fixed_horizontal_height", fixed_horizontal_params_.height, 2.0);
-    pnh_.param<double>("fixed_horizontal_angular_velocity", fixed_horizontal_params_.angular_velocity, 0.5);
+    pnh_.param<double>("fixed_horizontal_angular_velocity", fixed_horizontal_params_.angular_velocity, 0.2);
 
     dt_ = 1.0 / control_rate_;
     
@@ -213,6 +219,14 @@ void LQRTrackerNode::stateCallback(const mavros_msgs::State::ConstPtr& msg)
  */
 void LQRTrackerNode::localOffsetCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg) 
 {
+    last_rl_offset_time_ = msg->header.stamp;  // 记录最后收到偏移消息的时间戳
+    // 检测零偏移量：障碍物消失时清除偏移，恢复正常轨迹跟踪
+    if (msg->vector.x == 0.0 && msg->vector.y == 0.0 && msg->vector.z == 0.0)
+    {
+        rl_offset_ = Eigen::Vector3d::Zero();
+        has_rl_offset_ = false;
+        return;
+    }
     rl_offset_ = Eigen::Vector3d(msg->vector.x, msg->vector.y, msg->vector.z);
     has_rl_offset_ = true;
 }
@@ -407,11 +421,12 @@ void LQRTrackerNode::trackingLoop()
             last_viz_pub_time = ros::Time::now();
         }
         
-        // 检查是否完成一次轨迹循环
-        if (elapsed > trajectory_duration_) 
+        // 检查是否完成一次轨迹循环（使用实际轨迹时间长度）
+        double cycle_duration = trajectory_.empty() ? trajectory_duration_ : trajectory_.back().timestamp;
+        if (elapsed > cycle_duration) 
         {
             loop_count++;
-            ROS_INFO("[Tracking] 第 %d 次循环完成！重启轨迹...", loop_count);
+            ROS_INFO("[Tracking] 第 %d 次循环完成（周期 %.1fs）！重启轨迹...", loop_count, cycle_duration);
             
             // 重置开始时间，实现循环
             start_time = ros::Time::now();
@@ -429,10 +444,39 @@ void LQRTrackerNode::trackingLoop()
         // 获取基础参考轨迹点。RL只提供局部避障偏移，不替代基础轨迹。
         TrajectoryPoint ref_point = traj_generator_.getPointAtTime(trajectory_, elapsed);
 
+        // RL偏移超时保护：超过0.5s未收到 /rl_planner/local_offset 则自动清零
+        if (has_rl_offset_ && (ros::Time::now() - last_rl_offset_time_).toSec() > 0.5)
+        {
+            ROS_WARN_THROTTLE(2.0, "[Tracking] RL偏移超时(%.2fs)，自动清零",
+                              (ros::Time::now() - last_rl_offset_time_).toSec());
+            rl_offset_ = Eigen::Vector3d::Zero();
+            has_rl_offset_ = false;
+        }
+
         if (has_rl_offset_)
         {
             ref_point.position += rl_offset_;
+            // 检测到障碍物时减速 + 增加侧向速度分量
+            if (rl_offset_.z() > 0.01)
+            {
+                ref_point.velocity *= 0.0;  // 紧急避障：停止前向运动
+            }
+            else
+            {
+                ref_point.velocity *= rl_speed_scale_;  // 非紧急：按比例减速
+            }
+            // 位置偏移转为速度分量：LQR 位置反馈太弱(0.5·a·dt²≈2mm/步)，需通过速度前馈驱动侧移
+            ref_point.velocity += rl_offset_ * rl_velocity_gain_;  // 默认 2.0 Hz
         }
+
+        geometry_msgs::PoseStamped adjusted_ref_msg;
+        adjusted_ref_msg.header.stamp = ros::Time::now();
+        adjusted_ref_msg.header.frame_id = "map";
+        adjusted_ref_msg.pose.position.x = ref_point.position.x();
+        adjusted_ref_msg.pose.position.y = ref_point.position.y();
+        adjusted_ref_msg.pose.position.z = ref_point.position.z();
+        adjusted_ref_msg.pose.orientation = current_pose_.pose.orientation;
+        adjusted_ref_pub_.publish(adjusted_ref_msg);
         
         // 使用LQR计算控制指令
         Eigen::Vector3d desired_position = computeLQRControl(current_state_, ref_point);
@@ -460,6 +504,16 @@ void LQRTrackerNode::trackingLoop()
         pt.y = current_state_.position.y();
         pt.z = current_state_.position.z();
         flown_path_marker_.points.push_back(pt);
+
+        // 限制轨迹点数量，防止长时间运行内存无限增长（5000点 ≈ 100秒 @50Hz）
+        static const size_t kMaxFlownPathPoints = 5000;
+        if (flown_path_marker_.points.size() > kMaxFlownPathPoints)
+        {
+            size_t excess = flown_path_marker_.points.size() - kMaxFlownPathPoints;
+            flown_path_marker_.points.erase(flown_path_marker_.points.begin(),
+                                            flown_path_marker_.points.begin() + excess);
+        }
+
         flown_path_marker_.header.stamp = ros::Time::now();
         flown_path_pub_.publish(flown_path_marker_);
 
@@ -490,6 +544,19 @@ void LQRTrackerNode::run() {
         }
         check_rate.sleep();
     }
+
+    // 请求 drone_launch_controller 释放控制权（停止悬停发布）
+    ros::ServiceClient release_client = nh_.serviceClient<std_srvs::Trigger>("/drone_launch_controller/release_control");
+    std_srvs::Trigger release_srv;
+    if (release_client.call(release_srv))
+    {
+        ROS_INFO("[Init] 控制权释放结果: %s", release_srv.response.message.c_str());
+    }
+    else
+    {
+        ROS_WARN("[Init] 无法联系 drone_launch_controller 释放控制权，可能已释放或未运行");
+    }
+    ros::Duration(0.5).sleep();
     
     trackingLoop();
     

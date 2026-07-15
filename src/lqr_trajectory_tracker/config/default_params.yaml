@@ -59,13 +59,13 @@ center_y: 0.0
 center_z: 5.0
 
 # 圆半径 [m]
-radius: 3.0
+radius: 5.0
 
 # 飞行高度 [m] (螺旋时为结束高度)
 height: 5.0
 
 # 角速度 [rad/s]
-angular_velocity: 0.3
+angular_velocity: 10
 
 
 # ============================================================
@@ -85,5 +85,5 @@ fixed_horizontal_radius: 3.0
 # 飞行高度 [m]
 fixed_horizontal_height: 2.0
 
-# 角速度 [rad/s]
-fixed_horizontal_angular_velocity: 0.5
+# 角速度 [rad/s]（较低速度：线速度 = ω × radius ≈ 0.6 m/s）
+fixed_horizontal_angular_velocity: 0.2

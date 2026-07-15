@@ -9,6 +9,7 @@
 #include <mavros_msgs/SetMode.h>
 #include <mavros_msgs/CommandBool.h>
 #include <mavros_msgs/ParamSet.h>
+#include <std_srvs/Trigger.h>
 
 namespace drone_launch_controller {
 
@@ -27,6 +28,7 @@ DroneLaunchControllerNode::DroneLaunchControllerNode()
     health_check_service_ = nh_.advertiseService("/drone_launch_controller/drone_health_check", &DroneLaunchControllerNode::healthCheckCallback, this);
     arm_service_ = nh_.advertiseService("/drone_launch_controller/arm_motors", &DroneLaunchControllerNode::armMotorsCallback, this);
     connection_service_ = nh_.advertiseService("/drone_launch_controller/connection_status", &DroneLaunchControllerNode::connectionStatusCallback, this);
+    release_control_service_ = nh_.advertiseService("/drone_launch_controller/release_control", &DroneLaunchControllerNode::releaseControlCallback, this);
 
     set_mode_client_ = nh_.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
     arming_client_ = nh_.serviceClient<mavros_msgs::CommandBool>("/mavros/cmd/arming");
@@ -519,6 +521,16 @@ bool DroneLaunchControllerNode::connectionStatusCallback(drone_launch_controller
         res.message = "未连接";
     }
     ROS_INFO("[Connection] 状态: %s", res.message.c_str());
+    return true;
+}
+
+bool DroneLaunchControllerNode::releaseControlCallback(std_srvs::Trigger::Request& req,
+                                                       std_srvs::Trigger::Response& res)
+{
+    ROS_INFO("[ReleaseControl] 收到释放控制权请求");
+    takeoff_controller_.releaseControl();
+    res.success = true;
+    res.message = "控制权已释放";
     return true;
 }
 

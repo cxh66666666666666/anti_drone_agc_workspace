@@ -284,9 +284,9 @@ TrajectoryPoint TrajectoryGenerator::getPointAtTime(
 }
 
 /**
- * @brief 生成固定水平8字形轨迹
+ * @brief 生成固定水平8字形轨迹（4段：右半圆→上直线→左半圆→下直线，全程匀速）
  * @param params 固定水平8字形轨迹参数
- * @param duration 轨迹持续时间
+ * @param duration 轨迹持续时间（仅决定采样点数，不改变角速率）
  * @param dt 时间步长
  * @return std::vector<TrajectoryPoint> 固定水平8字形轨迹点向量
  */
@@ -296,54 +296,86 @@ std::vector<TrajectoryPoint> TrajectoryGenerator::generateFixedHorizontalTraject
     double dt) 
 {
     std::vector<TrajectoryPoint> trajectory;
-    int num_points = static_cast<int>(duration / dt) + 1;
 
     Eigen::Vector3d left_center(params.left_center_x, params.left_center_y, params.height);
     Eigen::Vector3d right_center(params.right_center_x, params.right_center_y, params.height);
 
     double omega = params.angular_velocity;
+    double r = params.radius;
+    double linear_speed = omega * r;  // 恒定线速度
+
+    // 各段边界点（圆弧与直线交接处）
+    Eigen::Vector3d top_right(right_center.x(), right_center.y() + r, params.height);
+    Eigen::Vector3d top_left(left_center.x(),  left_center.y()  + r, params.height);
+    Eigen::Vector3d bot_left(left_center.x(),  left_center.y()  - r, params.height);
+    Eigen::Vector3d bot_right(right_center.x(), right_center.y() - r, params.height);
+
+    // 各段持续时间：半圆弧 = π/ω，直线段 = 2r/(rω) = 2/ω
+    double T_arc = M_PI / omega;
+    double T_straight = 2.0 / omega;
+    double T_total = 2.0 * (T_arc + T_straight);
+
+    // 至少生成一个完整周期，确保4段轨迹都存在
+    double effective_duration = std::max(duration, T_total);
+    int num_points = static_cast<int>(effective_duration / dt) + 1;
 
     for (int i = 0; i < num_points; ++i) 
     {
         double t = i * dt;
-        double normalized_t = t / duration;
-        double theta_total = 2.0 * M_PI * normalized_t;
+        double t_cycle = std::fmod(t, T_total);
 
         Eigen::Vector3d position;
         Eigen::Vector3d velocity;
         Eigen::Vector3d acceleration;
 
-        double linear_vel = omega * params.radius;
-
-        if (theta_total <= M_PI) 
+        if (t_cycle < T_arc)
         {
-            double theta_right = -M_PI / 2.0 + theta_total;
-            position.x() = right_center.x() + params.radius * std::cos(theta_right);
-            position.y() = right_center.y() + params.radius * std::sin(theta_right);
+            // 段1: 右半圆 (θ: -π/2 → π/2)，顺时针
+            double theta = -M_PI / 2.0 + omega * t_cycle;
+            position.x() = right_center.x() + r * std::cos(theta);
+            position.y() = right_center.y() + r * std::sin(theta);
             position.z() = params.height;
 
-            velocity.x() = -params.radius * omega * std::sin(theta_right);
-            velocity.y() = params.radius * omega * std::cos(theta_right);
+            velocity.x() = -r * omega * std::sin(theta);
+            velocity.y() =  r * omega * std::cos(theta);
             velocity.z() = 0.0;
 
-            acceleration.x() = -params.radius * omega * omega * std::cos(theta_right);
-            acceleration.y() = -params.radius * omega * omega * std::sin(theta_right);
+            acceleration.x() = -r * omega * omega * std::cos(theta);
+            acceleration.y() = -r * omega * omega * std::sin(theta);
             acceleration.z() = 0.0;
-        } 
-        else 
+        }
+        else if (t_cycle < T_arc + T_straight)
         {
-            double theta_left = M_PI / 2.0 + (theta_total - M_PI);
-            position.x() = left_center.x() + params.radius * std::cos(theta_left);
-            position.y() = left_center.y() + params.radius * std::sin(theta_left);
+            // 段2: 上直线 (3,3) → (-3,3)，向左匀速
+            double progress = (t_cycle - T_arc) / T_straight;
+            position = top_right + progress * (top_left - top_right);
+            velocity = Eigen::Vector3d(-linear_speed, 0.0, 0.0);
+            acceleration = Eigen::Vector3d::Zero();
+        }
+        else if (t_cycle < 2.0 * T_arc + T_straight)
+        {
+            // 段3: 左半圆 (θ: π/2 → 3π/2)，顺时针
+            double t_local = t_cycle - (T_arc + T_straight);
+            double theta = M_PI / 2.0 + omega * t_local;
+            position.x() = left_center.x() + r * std::cos(theta);
+            position.y() = left_center.y() + r * std::sin(theta);
             position.z() = params.height;
 
-            velocity.x() = -params.radius * omega * std::sin(theta_left);
-            velocity.y() = params.radius * omega * std::cos(theta_left);
+            velocity.x() = -r * omega * std::sin(theta);
+            velocity.y() =  r * omega * std::cos(theta);
             velocity.z() = 0.0;
 
-            acceleration.x() = -params.radius * omega * omega * std::cos(theta_left);
-            acceleration.y() = -params.radius * omega * omega * std::sin(theta_left);
+            acceleration.x() = -r * omega * omega * std::cos(theta);
+            acceleration.y() = -r * omega * omega * std::sin(theta);
             acceleration.z() = 0.0;
+        }
+        else
+        {
+            // 段4: 下直线 (-3,-3) → (3,-3)，向右匀速
+            double progress = (t_cycle - (2.0 * T_arc + T_straight)) / T_straight;
+            position = bot_left + progress * (bot_right - bot_left);
+            velocity = Eigen::Vector3d(linear_speed, 0.0, 0.0);
+            acceleration = Eigen::Vector3d::Zero();
         }
 
         TrajectoryPoint point;

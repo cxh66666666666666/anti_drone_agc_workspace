@@ -4,6 +4,7 @@ logs/
 
 .catkin_tools/
 .codex/
+.codex_data/
 .agents/
 .gitrepo/
 

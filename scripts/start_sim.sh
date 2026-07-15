@@ -13,7 +13,7 @@ TIMEOUT="30.0"
 TRAJECTORY="fixed_horizontal"
 WITH_PERCEPTION="false"
 WITH_EXPERIMENT_LOGGER="false"
-OBSTACLE=""       # 障碍物坐标 "x,y,z"，空串表示不添加
+OBSTACLES=()      # 障碍物坐标数组，元素格式 "x,y,z"；空数组表示不添加
 GUI_MODE="true"
 
 # 后台进程PID列表
@@ -36,7 +36,7 @@ show_help() {
     echo "  --trajectory <类型>    轨迹类型 (默认: fixed_horizontal, 仅 lqr 模式)"
     echo "  --with-perception      启动 rl_obstacle_avoidance 感知+规划节点 (仅 lqr 模式)"
     echo "  --with-experiment-logger  启动实验数据记录节点 (仅 lqr 模式，需配合 --with-perception)"
-    echo "  --obstacle <x,y,z>     在指定坐标 spawn 静态障碍物 (仅 lqr/sim/takeoff 模式)"
+    echo "  --obstacle <x,y,z>     在指定坐标 spawn 静态障碍物 (仅 lqr/sim/takeoff 模式)，可多次指定以生成多个障碍物"
     echo "  --headless             禁用 Gazebo GUI，仅运行仿真服务器"
     echo "  -h, --help             显示此帮助"
     echo ""
@@ -211,9 +211,11 @@ run_lqr() {
 
     wait_for_mavros 60
 
-    # 可选: spawn 静态障碍物
-    if [ -n "$OBSTACLE" ]; then
-        spawn_obstacle "$OBSTACLE"
+    # 可选: spawn 静态障碍物（支持多个）
+    if [ ${#OBSTACLES[@]} -gt 0 ]; then
+        for i in "${!OBSTACLES[@]}"; do
+            spawn_obstacle "${OBSTACLES[$i]}" "$i"
+        done
     fi
 
     # 可选: 启动感知节点
@@ -313,12 +315,14 @@ run_perception() {
 }
 
 # 在 Gazebo 中 spawn 静态障碍物
+# 参数: $1=坐标 "x,y,z"；$2=索引（用于保证名称唯一，可选）
 spawn_obstacle() {
     local coords="$1"
+    local idx="${2:-$(date +%s)}"
     local x=$(echo "$coords" | cut -d',' -f1)
     local y=$(echo "$coords" | cut -d',' -f2)
     local z=$(echo "$coords" | cut -d',' -f3)
-    local name="obstacle_$(date +%s)"
+    local name="obstacle_${idx}_$(date +%s%N | cut -c1-6)"
 
     echo "[障碍物] 在 ($x, $y, $z) 处 spawn 静态障碍物..."
     echo "
@@ -399,7 +403,7 @@ while [ $# -gt 0 ]; do
             shift
             ;;
         --obstacle)
-            OBSTACLE="$2"
+            OBSTACLES+=("$2")
             shift 2
             ;;
         --with-experiment-logger)

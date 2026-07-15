@@ -254,6 +254,16 @@ void TakeoffController::stopHoverMaintainThread()
 }
 
 /**
+ * @brief 释放控制权：停止悬停发布
+ */
+void TakeoffController::releaseControl()
+{
+    ROS_INFO("[TakeoffController] 收到释放控制权请求，停止悬停发布...");
+    stopHoverMaintainThread();
+    ROS_INFO("[TakeoffController] 控制权已释放");
+}
+
+/**
  * @brief 悬停线程循环
  */
 void TakeoffController::hoverMaintainLoop() 

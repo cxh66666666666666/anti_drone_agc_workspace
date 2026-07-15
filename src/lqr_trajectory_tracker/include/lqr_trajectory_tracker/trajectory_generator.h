@@ -33,7 +33,7 @@ struct FixedHorizontalParams {
     double right_center_y = 0.0;
     double radius = 3.0;
     double height = 2.0;
-    double angular_velocity = 0.5;
+    double angular_velocity = 0.1;  // 较低速度: 线速度 = 0.1 * radius ≈ 0.3 m/s
 };
 
 /**

@@ -49,7 +49,7 @@ Visualization Manager:
         Z: 0
       Plane: XY
       Plane Cell Count: 100
-      Reference Frame: ""
+      Reference Frame: map
       Value: true
     - Alpha: 1
       Buffer Length: 1
@@ -133,21 +133,21 @@ Visualization Manager:
       Marker Topic: /lqr_tracker/flown_path
       Name: Flown Path
       Namespaces:
-        {}
+        flown_path: true
       Queue Size: 10
       Value: true
     - Alpha: 1
-      Arrow Length: 0.5
       Axes Length: 0.5
-      Axes Radius: 0.1
+      Axes Radius: 0.10000000149011612
       Class: rviz/Pose
       Color: 255; 255; 0
       Enabled: true
-      Head Diameter: 0.2
-      Head Length: 0.2
+      Head Length: 0.20000000298023224
+      Head Radius: 0.10000000149011612
       Name: RL Local Goal
-      Shaft Diameter: 0.1
+      Queue Size: 10
       Shaft Length: 0.5
+      Shaft Radius: 0.05000000074505806
       Shape: Arrow
       Topic: /rl_planner/local_goal
       Unreliable: false
@@ -180,7 +180,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 13.4193115234375
+      Distance: 37.21280288696289
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -196,9 +196,9 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: -0.3702026307582855
-      Target Frame: ""
-      Yaw: 2.280397891998291
+      Pitch: 1.5697963237762451
+      Target Frame: map
+      Yaw: 2.6853983402252197
     Saved: ~
 Window Geometry:
   Displays:
@@ -216,5 +216,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1272
-  X: 2060
-  Y: 223
+  X: 527
+  Y: 435
