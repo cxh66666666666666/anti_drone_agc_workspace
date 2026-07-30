@@ -10,8 +10,10 @@ project(rl_obstacle_avoidance)
 find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
+  std_srvs
   sensor_msgs
   geometry_msgs
+  gazebo_msgs
   message_generation
 )
 
@@ -85,6 +87,8 @@ catkin_package(
   CATKIN_DEPENDS
     rospy
     std_msgs
+    std_srvs
+    gazebo_msgs
     message_runtime
 )
 
@@ -152,6 +156,10 @@ catkin_install_python(PROGRAMS
   scripts/rl_planner_node.py
   scripts/perception_node.py
   scripts/dqn_agent.py
+  scripts/gazebo_env.py
+  scripts/replay_buffer.py
+  scripts/training_utils.py
+  scripts/train_dqn.py
   scripts/experiment_logger_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

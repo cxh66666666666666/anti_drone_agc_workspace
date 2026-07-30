@@ -20,7 +20,8 @@ enum class TrajectoryType {
     LINEAR,
     CIRCULAR,
     HELICAL,
-    FIXED_HORIZONTAL
+    FIXED_HORIZONTAL,
+    STEP  // 悬停轨迹：保持固定位置，零速度，供 RL 训练使用
 };
 
 /**
@@ -120,6 +121,18 @@ public:
      */
     std::vector<TrajectoryPoint> generateFixedHorizontalTrajectory(
         const FixedHorizontalParams& params,
+        double duration,
+        double dt);
+
+    /**
+     * @brief 生成悬停轨迹（所有点位置相同，零速度）
+     * @param position 悬停位置
+     * @param duration 轨迹持续时间
+     * @param dt 时间步长
+     * @return std::vector<TrajectoryPoint> 悬停轨迹点向量
+     */
+    std::vector<TrajectoryPoint> generateStepTrajectory(
+        const Eigen::Vector3d& position,
         double duration,
         double dt);
 

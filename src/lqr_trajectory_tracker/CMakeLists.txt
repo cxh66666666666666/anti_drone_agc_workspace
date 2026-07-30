@@ -7,6 +7,7 @@ find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   nav_msgs
   mavros_msgs
+  std_srvs
 )
 
 find_package(Eigen3 REQUIRED)
@@ -18,6 +19,7 @@ catkin_package(
     geometry_msgs
     nav_msgs
     mavros_msgs
+    std_srvs
   DEPENDS
     EIGEN3
 )

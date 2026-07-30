@@ -389,4 +389,32 @@ std::vector<TrajectoryPoint> TrajectoryGenerator::generateFixedHorizontalTraject
     return trajectory;
 }
 
+/**
+ * @brief 生成悬停轨迹（所有点位置相同，零速度/零加速度）
+ * @param position 悬停位置
+ * @param duration 轨迹持续时间
+ * @param dt 时间步长
+ * @return std::vector<TrajectoryPoint> 悬停轨迹点向量
+ */
+std::vector<TrajectoryPoint> TrajectoryGenerator::generateStepTrajectory(
+    const Eigen::Vector3d& position,
+    double duration,
+    double dt)
+{
+    std::vector<TrajectoryPoint> trajectory;
+    int num_points = static_cast<int>(duration / dt) + 1;
+
+    for (int i = 0; i < num_points; ++i)
+    {
+        TrajectoryPoint point;
+        point.timestamp = i * dt;
+        point.position = position;
+        point.velocity = Eigen::Vector3d::Zero();
+        point.acceleration = Eigen::Vector3d::Zero();
+        trajectory.push_back(point);
+    }
+
+    return trajectory;
+}
+
 }

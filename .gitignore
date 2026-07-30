@@ -1,6 +1,7 @@
 build/
 devel/
 logs/
+training_runs/
 
 .catkin_tools/
 .codex/

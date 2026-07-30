@@ -1,0 +1,27 @@
+# 规则避障 Baseline 参数配置
+# 以下参数经 Gazebo 仿真实验验证（无障碍、单障碍、三障碍），保存为稳定 baseline
+# 修改任何参数前请记录实验对照组
+
+# ---- 避障距离阈值 ----
+safe_distance_norm: 0.35     # 安全距离归一值，小于此值时触发避障（单位：归一化距离）
+emergency_dist_norm: 0.15     # 紧急避障阈值，小于此值时启用最大偏移 + 上升（单位：归一化距离）
+
+# ---- 偏移量控制 ----
+min_offset_xy: 0.3            # 最小水平偏移量 (m)，对应避障强度为 0
+max_offset_xy: 1.2            # 最大水平偏移量 (m)，对应避障强度为 1 / 紧急模式
+max_offset_z: 0.3             # 紧急避障时最大上升量 (m)
+
+# ---- 规划步长 ----
+step_xy: 1.5                  # 水平规划步长 (m)
+step_z: 0.3                   # 垂直规划步长 (m)
+min_height: 1.0               # 最低安全飞行高度 (m)
+
+# ---- 方向保持与平滑 ----
+side_avoid_gain: 0.5          # 侧方障碍避让增益 (0~1)，低于主避障强度
+offset_smooth_alpha: 0.8      # 偏移低通滤波系数 (0~1)，越大响应越快
+max_offset_change: 0.25       # 单个规划周期最大水平偏移变化 (m)
+heading_min_speed: 0.1        # 低于此速度时保持上一轨迹航向，避免方向噪声 (m/s)
+
+# ---- 关联参数（LQR Tracker 端配置） ----
+# rl_velocity_gain: 0.0       # 位于 lqr_tracker_node.cpp，默认只修改位置参考
+#                              如需调整请在 LQR Tracker 的 launch 文件中设置该参数

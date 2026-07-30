@@ -30,7 +30,8 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     , rl_offset_(0.0, 0.0, 0.0)
     , has_rl_offset_(false)
     , rl_speed_scale_(0.3)
-    , rl_velocity_gain_(1.0)
+    , rl_velocity_gain_(0.0)
+    , max_rl_velocity_(1.0)
     , trajectory_duration_(10.0)
     , control_rate_(50.0)
     , dt_(0.02)
@@ -54,11 +55,15 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pose_sub_ = nh_.subscribe("/mavros/local_position/pose", 10, &LQRTrackerNode::poseCallback, this);
     state_sub_ = nh_.subscribe("/mavros/state", 10, &LQRTrackerNode::stateCallback, this);
     local_offset_sub_ = nh_.subscribe("/rl_planner/local_offset", 10, &LQRTrackerNode::localOffsetCallback, this);
+    reset_trajectory_service_ = nh_.advertiseService(
+        "/lqr_tracker/reset_trajectory", &LQRTrackerNode::resetTrajectoryCallback, this);
     
     pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
     accel_pub_ = nh_.advertise<geometry_msgs::AccelStamped>("/lqr_tracker/accel_cmd", 10);
     ref_path_pub_ = nh_.advertise<nav_msgs::Path>("/lqr_tracker/ref_trajectory", 10);
     adjusted_ref_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/lqr_tracker/adjusted_ref", 10);
+    reference_velocity_pub_ = nh_.advertise<geometry_msgs::Vector3Stamped>(
+        "/lqr_tracker/reference_velocity", 10);
     flown_path_pub_ = nh_.advertise<visualization_msgs::Marker>("/lqr_tracker/flown_path", 10);
     pos_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/position_error", 10);
     vel_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/velocity_error", 10);
@@ -118,7 +123,8 @@ void LQRTrackerNode::loadParameters()
     pnh_.param<double>("trajectory_duration", trajectory_duration_, 30.0);
     pnh_.param<double>("control_rate", control_rate_, 50.0);
     pnh_.param<double>("rl_speed_scale", rl_speed_scale_, 0.3);  // 避障时的参考速度缩放系数
-    pnh_.param<double>("rl_velocity_gain", rl_velocity_gain_, 1.0);  // 偏移转速度增益（Hz）
+    pnh_.param<double>("rl_velocity_gain", rl_velocity_gain_, 0.0);  // 累积偏移默认只改位置参考
+    pnh_.param<double>("max_rl_velocity", max_rl_velocity_, 1.0);
     
     pnh_.param<double>("q_pos_xy", q_pos_xy_, 10.0);
     pnh_.param<double>("q_pos_z", q_pos_z_, 15.0);
@@ -149,6 +155,11 @@ void LQRTrackerNode::loadParameters()
     pnh_.param<double>("fixed_horizontal_radius", fixed_horizontal_params_.radius, 3.0);
     pnh_.param<double>("fixed_horizontal_height", fixed_horizontal_params_.height, 2.0);
     pnh_.param<double>("fixed_horizontal_angular_velocity", fixed_horizontal_params_.angular_velocity, 0.2);
+
+    // 悬停轨迹参数（用于 RL 训练）
+    pnh_.param<double>("step_x", step_position_.x(), 0.0);
+    pnh_.param<double>("step_y", step_position_.y(), 0.0);
+    pnh_.param<double>("step_z", step_position_.z(), 5.0);
 
     dt_ = 1.0 / control_rate_;
     
@@ -181,6 +192,13 @@ void LQRTrackerNode::generateTrajectory()
     {
         trajectory_ = traj_generator_.generateFixedHorizontalTrajectory(
             fixed_horizontal_params_, trajectory_duration_, dt_);
+    } 
+    else if (trajectory_type_ == "step") 
+    {
+        trajectory_ = traj_generator_.generateStepTrajectory(
+            step_position_, trajectory_duration_, dt_);
+        ROS_INFO("[LQR] 悬停轨迹: (%.1f, %.1f, %.1f)", 
+                 step_position_.x(), step_position_.y(), step_position_.z());
     } 
     else 
     {
@@ -229,6 +247,27 @@ void LQRTrackerNode::localOffsetCallback(const geometry_msgs::Vector3Stamped::Co
     }
     rl_offset_ = Eigen::Vector3d(msg->vector.x, msg->vector.y, msg->vector.z);
     has_rl_offset_ = true;
+}
+
+bool LQRTrackerNode::resetTrajectoryCallback(std_srvs::Trigger::Request&,
+                                             std_srvs::Trigger::Response& res)
+{
+    trajectory_start_time_ = ros::Time::now();
+    rl_offset_ = Eigen::Vector3d::Zero();
+    has_rl_offset_ = false;
+    position_errors_.clear();
+    velocity_errors_.clear();
+    flown_path_marker_.points.clear();
+
+    if (!trajectory_.empty())
+    {
+        publishPositionSetpoint(trajectory_.front().position);
+    }
+
+    res.success = true;
+    res.message = "trajectory restarted from t=0";
+    ROS_INFO("[Tracking] 收到 episode reset，参考轨迹已从 t=0 重新开始");
+    return true;
 }
 
 /**
@@ -392,7 +431,7 @@ void LQRTrackerNode::trackingLoop()
     ROS_INFO("[Tracking] 开始轨迹跟踪...");
     
     ros::Rate rate(control_rate_);
-    ros::Time start_time = ros::Time::now();
+    trajectory_start_time_ = ros::Time::now();
     ros::Time last_viz_pub_time = ros::Time::now();
     int loop_count = 0;
     
@@ -412,7 +451,12 @@ void LQRTrackerNode::trackingLoop()
         }
         
         // 计算当前时间与开始时间的差值（单位：秒）
-        double elapsed = (ros::Time::now() - start_time).toSec();
+        double elapsed = (ros::Time::now() - trajectory_start_time_).toSec();
+        if (elapsed < 0.0)
+        {
+            trajectory_start_time_ = ros::Time::now();
+            elapsed = 0.0;
+        }
         
         // 每1秒重新发布一次轨迹可视化，确保RViz能接收到
         if ((ros::Time::now() - last_viz_pub_time).toSec() >= 1.0) 
@@ -429,7 +473,7 @@ void LQRTrackerNode::trackingLoop()
             ROS_INFO("[Tracking] 第 %d 次循环完成（周期 %.1fs）！重启轨迹...", loop_count, cycle_duration);
             
             // 重置开始时间，实现循环
-            start_time = ros::Time::now();
+            trajectory_start_time_ = ros::Time::now();
             elapsed = 0.0;
             
             // 清空误差记录，开始新的统计
@@ -443,6 +487,13 @@ void LQRTrackerNode::trackingLoop()
         
         // 获取基础参考轨迹点。RL只提供局部避障偏移，不替代基础轨迹。
         TrajectoryPoint ref_point = traj_generator_.getPointAtTime(trajectory_, elapsed);
+        geometry_msgs::Vector3Stamped reference_velocity_msg;
+        reference_velocity_msg.header.stamp = ros::Time::now();
+        reference_velocity_msg.header.frame_id = "map";
+        reference_velocity_msg.vector.x = ref_point.velocity.x();
+        reference_velocity_msg.vector.y = ref_point.velocity.y();
+        reference_velocity_msg.vector.z = ref_point.velocity.z();
+        reference_velocity_pub_.publish(reference_velocity_msg);
 
         // RL偏移超时保护：超过0.5s未收到 /rl_planner/local_offset 则自动清零
         if (has_rl_offset_ && (ros::Time::now() - last_rl_offset_time_).toSec() > 0.5)
@@ -465,8 +516,13 @@ void LQRTrackerNode::trackingLoop()
             {
                 ref_point.velocity *= rl_speed_scale_;  // 非紧急：按比例减速
             }
-            // 位置偏移转为速度分量：LQR 位置反馈太弱(0.5·a·dt²≈2mm/步)，需通过速度前馈驱动侧移
-            ref_point.velocity += rl_offset_ * rl_velocity_gain_;  // 默认 2.0 Hz
+            Eigen::Vector3d rl_velocity = rl_offset_ * rl_velocity_gain_;
+            double rl_velocity_norm = rl_velocity.norm();
+            if (rl_velocity_norm > max_rl_velocity_ && rl_velocity_norm > 1e-6)
+            {
+                rl_velocity *= max_rl_velocity_ / rl_velocity_norm;
+            }
+            ref_point.velocity += rl_velocity;
         }
 
         geometry_msgs::PoseStamped adjusted_ref_msg;

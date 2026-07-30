@@ -3,6 +3,10 @@
   <!-- LQR轨迹跟踪节点 - 仿真环境专用 -->
   <arg name="mavros_ns" default="/mavros" doc="MAVROS命名空间"/>
   <arg name="rviz" default="true" doc="是否启动RViz"/>
+  <arg name="trajectory_type" default="fixed_horizontal" doc="轨迹类型: linear | circular | helical | fixed_horizontal | step"/>
+  <arg name="start_z" default="2.0" doc="线性轨迹起点高度"/>
+  <arg name="step_z" default="5.0" doc="step训练轨迹悬停高度"/>
+  <arg name="fixed_horizontal_height" default="2.0" doc="固定水平八字轨迹高度"/>
 
   <!-- 启动RViz -->
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(find lqr_trajectory_tracker)/rviz/lqr_tracker.rviz">
@@ -10,8 +14,12 @@
   </node>
 
   <node pkg="lqr_trajectory_tracker" type="lqr_tracker_node" name="lqr_tracker_node" output="screen">
-    <!-- 从 YAML 加载全部参数，命令行可覆盖: roslaunch ... trajectory_type:=linear -->
+    <!-- 先加载 YAML，再用 launch 参数覆盖训练/仿真常用项 -->
     <rosparam file="$(find lqr_trajectory_tracker)/config/default_params.yaml"/>
+    <param name="trajectory_type" value="$(arg trajectory_type)"/>
+    <param name="start_z" value="$(arg start_z)"/>
+    <param name="step_z" value="$(arg step_z)"/>
+    <param name="fixed_horizontal_height" value="$(arg fixed_horizontal_height)"/>
     <env name="ROSCONSOLE_CONFIG_FILE" value="$(find lqr_trajectory_tracker)/config/rosconsole.config"/>
 
     <!-- 话题重映射 -->

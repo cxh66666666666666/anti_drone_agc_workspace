@@ -7,14 +7,18 @@
 # ============================================================
 # 1. 控制参数
 # ============================================================
-# 轨迹类型: linear | circular | helical | fixed_horizontal
-trajectory_type: "fixed_horizontal"
+# 轨迹类型: linear | circular | helical | fixed_horizontal | step
+trajectory_type: "linear"
 
 # 轨迹总时长 [秒]
 trajectory_duration: 30.0
 
 # 控制频率 [Hz]
 control_rate: 50.0
+
+# RL 局部 offset 用于短时避障；默认不额外转成速度前馈，避免 offset 造成冲飞
+rl_velocity_gain: 0.0
+max_rl_velocity: 1.0
 
 
 # ============================================================
@@ -87,3 +91,12 @@ fixed_horizontal_height: 2.0
 
 # 角速度 [rad/s]（较低速度：线速度 = ω × radius ≈ 0.6 m/s）
 fixed_horizontal_angular_velocity: 0.2
+
+
+# ============================================================
+# 6. 悬停轨迹参数 (trajectory_type=step)
+# ============================================================
+# 悬停位置 [m]（无人机保持静止，供 RL 训练使用，位移完全由 /rl_planner/local_offset 驱动）
+step_x: 0.0
+step_y: 0.0
+step_z: 5.0

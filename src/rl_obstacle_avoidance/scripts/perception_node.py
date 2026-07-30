@@ -24,6 +24,7 @@ class PerceptionNode:
         # ========== 配置参数 ==========
         self.num_sector = rospy.get_param('~num_sector', 12)
         self.max_range = rospy.get_param('~max_range', 10.0)
+        # The rule baseline uses 0.5 m to reject returns from the drone body.
         self.min_range = rospy.get_param('~min_range', 0.5)
         self.safe_height = rospy.get_param('~safe_height', 1.5)
         self.goal_tolerance = rospy.get_param('~goal_tolerance', 1.0)

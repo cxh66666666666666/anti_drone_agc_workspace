@@ -12,6 +12,7 @@ ALTITUDE="5.0"
 TIMEOUT="30.0"
 TRAJECTORY="fixed_horizontal"
 WITH_PERCEPTION="false"
+TRAINING_MODE="false"
 WITH_EXPERIMENT_LOGGER="false"
 OBSTACLES=()      # 障碍物坐标数组，元素格式 "x,y,z"；空数组表示不添加
 GUI_MODE="true"
@@ -35,6 +36,7 @@ show_help() {
     echo "  --altitude <米>        起飞目标高度 (默认: 5.0, 用于 takeoff/lqr 模式)"
     echo "  --trajectory <类型>    轨迹类型 (默认: fixed_horizontal, 仅 lqr 模式)"
     echo "  --with-perception      启动 rl_obstacle_avoidance 感知+规划节点 (仅 lqr 模式)"
+    echo "  --training             仅启动感知节点，供 DQN 独占控制 offset (仅 lqr 模式)"
     echo "  --with-experiment-logger  启动实验数据记录节点 (仅 lqr 模式，需配合 --with-perception)"
     echo "  --obstacle <x,y,z>     在指定坐标 spawn 静态障碍物 (仅 lqr/sim/takeoff 模式)，可多次指定以生成多个障碍物"
     echo "  --headless             禁用 Gazebo GUI，仅运行仿真服务器"
@@ -44,6 +46,7 @@ show_help() {
     echo "  ./scripts/start_sim.sh sim"
     echo "  ./scripts/start_sim.sh takeoff --altitude 10.0"
     echo "  ./scripts/start_sim.sh lqr --with-perception"
+    echo "  ./scripts/start_sim.sh lqr --training"
     echo "  ./scripts/start_sim.sh lqr --with-perception --with-experiment-logger"
     echo "  ./scripts/start_sim.sh perception"
 }
@@ -211,6 +214,16 @@ run_lqr() {
 
     wait_for_mavros 60
 
+    if [ "$TRAINING_MODE" = "true" ]; then
+        local obstacle_spec=""
+        if [ ${#OBSTACLES[@]} -gt 0 ]; then
+            obstacle_spec=$(IFS=';'; echo "${OBSTACLES[*]}")
+        fi
+        rosparam set /dqn_training/scenario_obstacles "$obstacle_spec"
+        rosparam set /dqn_training/trajectory "$TRAJECTORY"
+        rosparam set /dqn_training/altitude "$ALTITUDE"
+    fi
+
     # 可选: spawn 静态障碍物（支持多个）
     if [ ${#OBSTACLES[@]} -gt 0 ]; then
         for i in "${!OBSTACLES[@]}"; do
@@ -227,11 +240,13 @@ run_lqr() {
         echo "[感知] perception_node PID: ${PIDS[-1]}"
         sleep 2
 
-        echo "[感知] 启动 rl_planner_node..."
-        roslaunch rl_obstacle_avoidance rl_planner_node.launch &
-        PIDS+=($!)
-        echo "[感知] rl_planner_node PID: ${PIDS[-1]}"
-        sleep 2
+        if [ "$TRAINING_MODE" != "true" ]; then
+            echo "[感知] 启动 rl_planner_node..."
+            roslaunch rl_obstacle_avoidance rl_planner_node.launch &
+            PIDS+=($!)
+            echo "[感知] rl_planner_node PID: ${PIDS[-1]}"
+            sleep 2
+        fi
     fi
 
     # 可选: 启动实验数据记录节点
@@ -255,7 +270,15 @@ timeout: ${TIMEOUT}"
 
     # 启动 LQR轨迹跟踪器
     echo "[启动] 启动 LQR轨迹跟踪器..."
-    roslaunch lqr_trajectory_tracker lqr_tracker_sim.launch trajectory_type:=${TRAJECTORY} &
+    LQR_ARGS=("trajectory_type:=${TRAJECTORY}")
+    if [ "$TRAJECTORY" = "step" ]; then
+        LQR_ARGS+=("step_z:=${ALTITUDE}")
+    elif [ "$TRAJECTORY" = "linear" ]; then
+        LQR_ARGS+=("start_z:=${ALTITUDE}")
+    elif [ "$TRAJECTORY" = "fixed_horizontal" ]; then
+        LQR_ARGS+=("fixed_horizontal_height:=${ALTITUDE}")
+    fi
+    roslaunch lqr_trajectory_tracker lqr_tracker_sim.launch "${LQR_ARGS[@]}" &
     PIDS+=($!)
     echo "[启动] LQR Tracker PID: ${PIDS[-1]}"
 
@@ -400,6 +423,11 @@ while [ $# -gt 0 ]; do
             ;;
         --with-perception)
             WITH_PERCEPTION="true"
+            shift
+            ;;
+        --training)
+            WITH_PERCEPTION="true"
+            TRAINING_MODE="true"
             shift
             ;;
         --obstacle)
