@@ -19,8 +19,8 @@
 ## 快速开始
 
 ```bash
-# 1. 启动 PX4 SITL + MAVROS
-roslaunch px4 mavros_posix_sitl.launch
+# 1. 启动 PX4 SITL + MAVROS（iris_3d_lidar 机型，含 Velodyne 激光雷达）
+roslaunch px4 mavros_posix_sitl.launch vehicle:=iris vehicle_sdf:=iris_3d_lidar
 
 # 2. 启动控制器
 roslaunch drone_launch_controller drone_controller.launch
@@ -38,6 +38,12 @@ rosservice call /drone_launch_controller/arm_motors "force: false"
 rosservice call /drone_launch_controller/takeoff "altitude: 5.0" "timeout: 30.0"
 ```
 
+也可以使用工作空间统一启动脚本一键完成仿真启动 + 起飞：
+
+```bash
+./scripts/start_sim.sh takeoff --altitude 5.0
+```
+
 ## 核心服务
 
 | 服务名称 | srv 类型 | 说明 |
@@ -46,12 +52,14 @@ rosservice call /drone_launch_controller/takeoff "altitude: 5.0" "timeout: 30.0"
 | `/drone_launch_controller/drone_health_check` | DroneHealthCheck | 触发全局自检，返回 success, result, health_status, message |
 | `/drone_launch_controller/arm_motors` | ArmMotors | 电机解锁（请求: force, 响应: success, result, message） |
 | `/drone_launch_controller/takeoff` | Takeoff | 起飞控制（请求: altitude, timeout, 响应: success, result, achieved_altitude, message） |
+| `/drone_launch_controller/release_control` | std_srvs/Trigger | 释放起飞控制权（停止悬停保持发布，响应: success, message） |
 
 ## 发布话题
 
 | 话题 | 类型 | 说明 |
 |------|------|------|
 | `/drone_launch_controller/flight_status` | FlightStatus | 飞行状态（10 Hz） |
+| `/mavros/setpoint_position/local` | PoseStamped | 起飞过程中的位置设定点（交由起飞控制器发布） |
 
 ## 订阅话题
 
