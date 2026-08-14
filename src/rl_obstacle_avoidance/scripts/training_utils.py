@@ -163,3 +163,29 @@ def validate_distance_thresholds(min_range, collision_distance,
     if not collision_distance < emergency_distance < safe_distance:
         raise ValueError(
             "distance thresholds must satisfy collision < emergency < safe")
+
+
+def epsilon_linear_at_step(start, end, decay_steps, step):
+    """线性衰减 epsilon 从 start 到 end，跨越 decay_steps 步。
+
+    Args:
+        start: 初始 epsilon 值（e.g. 1.0）
+        end: 最终 epsilon 值（e.g. 0.05）
+        decay_steps: 衰减总步数
+        step: 当前步数
+
+    Returns:
+        float: 当前 epsilon 值
+    """
+    # 参数验证
+    if not 0.0 <= end <= start <= 1.0:
+        raise ValueError("epsilon must satisfy 0 <= end <= start <= 1")
+    if decay_steps <= 0:
+        raise ValueError("decay_steps must be positive")
+    # 边界处理
+    if step <= 0:
+        return start
+    if step >= decay_steps:
+        return end
+    # 线性插值
+    return start + (end - start) * (float(step) / decay_steps)

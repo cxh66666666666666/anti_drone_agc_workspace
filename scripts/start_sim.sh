@@ -222,6 +222,7 @@ run_lqr() {
         rosparam set /dqn_training/scenario_obstacles "$obstacle_spec"
         rosparam set /dqn_training/trajectory "$TRAJECTORY"
         rosparam set /dqn_training/altitude "$ALTITUDE"
+        rosparam set /gazebo_env/w_progress 1.0
     fi
 
     # 可选: spawn 静态障碍物（支持多个）

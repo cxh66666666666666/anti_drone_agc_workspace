@@ -11,24 +11,38 @@ import torch.nn as nn
 import torch.optim as optim
 
 
-class QNetwork(nn.Module):
+class DuelingQNetwork(nn.Module):
     """
-    @brief: 两层 MLP Q 网络
-    @detail: state_dim → 128 → ReLU → 128 → ReLU → action_dim
+    @brief: Dueling Q 网络 — 共享特征层 + value/advantage 分流
+    @detail: state_dim → 256 → ReLU → 256 → ReLU → 256 → ReLU → V(s) + A(s,a) - mean(A)
     """
 
     def __init__(self, state_dim, action_dim):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(state_dim, 128),
+        # 共享特征层
+        self.feature = nn.Sequential(
+            nn.Linear(state_dim, 256),
             nn.ReLU(),
-            nn.Linear(128, 128),
+            nn.Linear(256, 256),
             nn.ReLU(),
-            nn.Linear(128, action_dim),
+            nn.Linear(256, 256),
+            nn.ReLU(),
         )
+        # 价值流 V(s)
+        self.value = nn.Linear(256, 1)
+        # 优势流 A(s, a)
+        self.advantage = nn.Linear(256, action_dim)
 
     def forward(self, x):
-        return self.net(x)
+        feat = self.feature(x)
+        value = self.value(feat)          # [batch, 1]
+        advantage = self.advantage(feat)  # [batch, action_dim]
+        # Q(s,a) = V(s) + A(s,a) - mean(A(s,·))
+        return value + advantage - advantage.mean(dim=-1, keepdim=True)
+
+
+# 向后兼容别名
+QNetwork = DuelingQNetwork
 
 
 class DQNAgent:
@@ -40,6 +54,7 @@ class DQNAgent:
         self.state_dim = state_dim
         self.action_dim = action_dim
         self.gamma = gamma
+        self.initial_lr = lr
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # 在线网络（训练更新）
@@ -73,10 +88,11 @@ class DQNAgent:
             allowed_q = q_values[0].index_select(0, allowed_t)
             return allowed[int(allowed_q.argmax().item())]
 
-    def update(self, batch):
+    def update(self, batch, weights=None):
         """
         @brief: 从经验批次学习，执行一步梯度下降
         @param batch: Experience 命名元组列表
+        @param weights: 重要性采样权重列表（PER），None 表示均匀权重
         @return: float loss 值
         """
         # 解包 batch → tensor
@@ -89,21 +105,32 @@ class DQNAgent:
         # 当前 Q 值
         q_values = self.q_network(states).gather(1, actions)
 
-        # TD target：r + gamma * max_a' Q_target(s', a') * (1 - done)
+        # Double DQN TD target：用 q_network 选动作，target_network 估值
         with torch.no_grad():
-            next_values = self.target_network(next_states)
+            # 用 q_network 获取 next_states 的 Q 值并 mask 不可用动作
+            next_q_values = self.q_network(next_states)
             for row, experience in enumerate(batch):
                 allowed = experience.next_allowed_actions
                 if allowed is not None:
-                    blocked = [action for action in range(self.action_dim)
-                               if action not in allowed]
+                    blocked = [a for a in range(self.action_dim)
+                               if a not in allowed]
                     if blocked:
-                        next_values[row, blocked] = float("-inf")
-            next_q = next_values.max(dim=1, keepdim=True)[0]
+                        next_q_values[row, blocked] = float("-inf")
+            # 选最佳动作索引
+            best_actions = next_q_values.argmax(dim=1, keepdim=True)
+            # 用 target_network 获取对应动作的 Q 值
+            next_q = self.target_network(next_states).gather(1, best_actions)
             target = rewards + self.gamma * next_q * (1.0 - dones)
 
-        # MSE loss + 反向传播
-        loss = self.loss_fn(q_values, target)
+        # 计算逐元素 loss，应用 IS 权重
+        element_loss = self.loss_fn(q_values, target)
+        if weights is not None:
+            weights_t = torch.FloatTensor(weights).unsqueeze(1).to(self.device)
+            loss = (element_loss * weights_t).mean()
+        else:
+            loss = element_loss
+
+        # 反向传播
         self.optimizer.zero_grad()
         loss.backward()
         nn.utils.clip_grad_norm_(self.q_network.parameters(), max_norm=10.0)
@@ -114,6 +141,20 @@ class DQNAgent:
     def sync_target(self):
         """将在线网络权重复制到目标网络"""
         self.target_network.load_state_dict(self.q_network.state_dict())
+
+    def schedule_lr(self, episode, total_episodes):
+        """
+        @brief: 余弦退火学习率调度
+        @param episode: 当前 episode 编号（从 0 开始）
+        @param total_episodes: 总 episode 数
+        """
+        import math
+        lr_min = self.initial_lr * 0.01
+        lr_max = self.initial_lr
+        lr = lr_min + 0.5 * (lr_max - lr_min) * (1.0 + math.cos(math.pi * episode / total_episodes))
+        for param_group in self.optimizer.param_groups:
+            param_group["lr"] = lr
+        return lr
 
     def save(self, path):
         """保存在线网络权重"""

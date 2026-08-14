@@ -75,27 +75,28 @@ class GazeboEnv:
 
         # Episode 与奖励参数
         self.max_episode_steps = rospy.get_param("~max_episode_steps", 500)
-        self.safe_reward = rospy.get_param("~safe_reward", 0.05)
-        self.step_penalty = rospy.get_param("~step_penalty", 0.02)
-        self.action_change_penalty = rospy.get_param("~action_change_penalty", 0.01)
+        self.safe_reward = rospy.get_param("~safe_reward", 0.15)
+        self.step_penalty = rospy.get_param("~step_penalty", 0.005)
+        self.action_change_penalty = rospy.get_param("~action_change_penalty", 0.005)
         self.unnecessary_action_penalty = rospy.get_param(
-            "~unnecessary_action_penalty", 0.01)
+            "~unnecessary_action_penalty", 0.005)
         self.avoidance_success_reward = rospy.get_param(
-            "~avoidance_success_reward", 30.0)
+            "~avoidance_success_reward", 25.0)
         self.terminal_failure_penalty = rospy.get_param(
-            "~terminal_failure_penalty", 30.0)
+            "~terminal_failure_penalty", 20.0)
         self.safe_proximity_penalty = rospy.get_param(
-            "~safe_proximity_penalty", 0.01)
+            "~safe_proximity_penalty", 0.005)
         self.emergency_proximity_penalty = rospy.get_param(
-            "~emergency_proximity_penalty", 0.05)
+            "~emergency_proximity_penalty", 0.02)
         self.avoidance_clear_steps = rospy.get_param(
             "~avoidance_clear_steps", 10)
         self.avoidance_tracking_tolerance = rospy.get_param(
             "~avoidance_tracking_tolerance", 1.0)
-        self.tracking_error_weight = rospy.get_param("~tracking_error_weight", 0.02)
+        self.tracking_error_weight = rospy.get_param("~tracking_error_weight", 0.01)
         self.max_tracking_error = rospy.get_param("~max_tracking_error", 10.0)
         self.max_terminal_tracking_error = rospy.get_param("~max_terminal_tracking_error", 30.0)
         self.reward_clip_abs = rospy.get_param("~reward_clip_abs", 30.0)
+        self.w_progress = rospy.get_param("~w_progress", 0.5)
 
         # Reset 起点默认跟随 LQR 当前轨迹首点，也允许训练参数单独覆盖。
         # 已解锁飞行时优先通过 setpoint 返回起点，避免 Gazebo 传送与 PX4 EKF 状态脱节。
@@ -149,6 +150,7 @@ class GazeboEnv:
         self.obstacle_encountered = False
         self.avoidance_clear_count = 0
         self.avoidance_complete = False
+        self.prev_dist_to_target = None
 
         rospy.Subscriber("/obstacle_features", ObstacleFeatures, self._features_cb)
         rospy.Subscriber("/mavros/local_position/pose", PoseStamped, self._pose_cb)
@@ -213,6 +215,7 @@ class GazeboEnv:
                                   if self.trajectory_type == "step"
                                   else self.moving_reset_tolerance)
         self.episode_step = 0
+        self.prev_dist_to_target = None
         self.cumulative_reward = 0.0
         self.last_action = 0
         self.current_action = 0
@@ -301,7 +304,7 @@ class GazeboEnv:
             reward += self.avoidance_success_reward
         elif self.last_done_reason in ("collision", "diverged",
                                        "low_altitude", "timeout"):
-            reward = -self.terminal_failure_penalty
+            reward -= self.terminal_failure_penalty
         reward = self._clip_reward(reward)
         self.cumulative_reward += reward
         self.last_action = self.current_action
@@ -374,6 +377,18 @@ class GazeboEnv:
             self.last_action, self.current_action, self.action_change_penalty)
         if obstacle_min >= self.safe_distance_norm and self.current_action != 0:
             reward -= self.unnecessary_action_penalty
+
+        # progress reward: 仅安全区域生效，奖励向目标靠近，避免惩罚正常避障偏离
+        if (self.prev_dist_to_target is not None
+                and hasattr(self, 'w_progress')
+                and obstacle_min >= self.safe_distance_norm):
+            curr_dist = self._tracking_error()
+            # 确保 curr_dist 有效（非 NaN 且非 None），避免异常值污染 progress
+            if curr_dist is not None and not math.isnan(curr_dist):
+                progress = self.prev_dist_to_target - curr_dist
+                reward += self.w_progress * progress
+        # 更新 prev_dist_to_target 为下次 step 的 progress 计算做准备
+        self.prev_dist_to_target = self._tracking_error()
 
         return self._clip_reward(reward)
 

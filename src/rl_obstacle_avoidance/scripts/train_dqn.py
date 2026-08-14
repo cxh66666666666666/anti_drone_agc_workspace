@@ -16,17 +16,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dqn_agent import DQNAgent
 from gazebo_env import ACTION_NAMES, GazeboEnv
-from replay_buffer import ReplayBuffer
-from training_utils import epsilon_at_step
+from replay_buffer import PrioritizedReplayBuffer, ReplayBuffer
+from training_utils import epsilon_linear_at_step
 
 
-BATCH_SIZE = 32
-BUFFER_CAPACITY = 50000
+BATCH_SIZE = 64
+BUFFER_CAPACITY = 100000
 EPSILON_START = 1.0
 EPSILON_END = 0.05
 GAMMA = 0.99
-LEARNING_RATE = 1e-3
-TARGET_UPDATE_STEPS = 500
+LEARNING_RATE = 5e-4
+PER_ALPHA = 0.6
+PER_BETA = 0.4
+TARGET_UPDATE_STEPS = 1000
 TRAIN_START_STEPS = 1000
 MAX_CONSECUTIVE_RESET_FAILURES = 3
 HEALTH_CHECK_EPISODES = 20
@@ -70,7 +72,9 @@ def parse_args():
     parser.add_argument("--eval-episodes", type=int, default=5,
                         help="每次贪心评估的 episode 数")
     parser.add_argument("--epsilon-decay-steps", type=int, default=0,
-                        help="epsilon 衰减步数；0 表示总预算的 80%%")
+                        help="epsilon 衰减步数；0 表示总预算的 90%%")
+    parser.add_argument("--resume", default=None,
+                        help="从已有模型恢复训练，传入 .pt 文件路径")
     parser.add_argument("--seed", type=int, default=0, help="随机种子")
     args = parser.parse_args()
 
@@ -204,14 +208,17 @@ def main():
 
     decay_steps = args.epsilon_decay_steps
     if decay_steps == 0:
-        decay_steps = max(1, int(args.episodes * args.max_steps * 0.8))
+        decay_steps = max(1, int(args.episodes * args.max_steps * 0.9))
 
     print("[初始化] 创建 GazeboEnv ...")
     env = GazeboEnv()
     env.max_episode_steps = args.max_steps
     agent = DQNAgent(env.observation_space_dim, env.n_actions,
                      lr=LEARNING_RATE, gamma=GAMMA)
-    buffer = ReplayBuffer(BUFFER_CAPACITY)
+    if args.resume:
+        agent.load(args.resume)
+        print("[恢复] 已加载模型: %s" % args.resume)
+    buffer = PrioritizedReplayBuffer(BUFFER_CAPACITY, alpha=PER_ALPHA, beta=PER_BETA)
 
     run_dir = create_run_dir(args.run_dir)
     train_log_path = os.path.join(run_dir, "training_log.csv")
@@ -233,6 +240,9 @@ def main():
         "seed": args.seed,
         "batch_size": BATCH_SIZE,
         "buffer_capacity": BUFFER_CAPACITY,
+        "buffer_type": "prioritized",
+        "per_alpha": PER_ALPHA,
+        "per_beta": PER_BETA,
         "train_start_steps": TRAIN_START_STEPS,
         "target_update_steps": TARGET_UPDATE_STEPS,
         "health_check_episodes": HEALTH_CHECK_EPISODES,
@@ -275,7 +285,7 @@ def main():
                     "total_reward": "0.00",
                     "steps": 0,
                     "total_steps": total_steps,
-                    "epsilon": "%.4f" % epsilon_at_step(
+                    "epsilon": "%.4f" % epsilon_linear_at_step(
                         EPSILON_START, EPSILON_END, decay_steps, total_steps),
                     "avg_loss": "0.000000",
                     "result": "failed",
@@ -311,7 +321,7 @@ def main():
             action_counts = [0] * env.n_actions
 
             for _ in range(args.max_steps):
-                epsilon = epsilon_at_step(
+                epsilon = epsilon_linear_at_step(
                     EPSILON_START, EPSILON_END, decay_steps, total_steps)
                 action = agent.select_action(
                     state, epsilon, allowed_actions=env.allowed_actions())
@@ -347,11 +357,15 @@ def main():
                 append_csv(step_log_path, STEP_FIELDS, step_row)
 
                 if len(buffer) >= TRAIN_START_STEPS:
-                    batch = buffer.sample(BATCH_SIZE)
-                    loss = agent.update(batch)
-                    update_steps += 1
-                    if loss is not None:
-                        losses.append(loss)
+                    result = buffer.sample(BATCH_SIZE)
+                    if result is not None:
+                        batch, indices, weights = result
+                        loss = agent.update(batch, weights)
+                        update_steps += 1
+                        if loss is not None:
+                            losses.append(loss)
+                            # 用 loss 作为 td_error 近似，更新优先级
+                            buffer.update_priorities(indices, [loss] * len(batch))
 
                 total_steps += 1
                 if total_steps % TARGET_UPDATE_STEPS == 0:
@@ -372,7 +386,7 @@ def main():
                 result = "unsafe_timeout"
             else:
                 result = "failed"
-            epsilon = epsilon_at_step(
+            epsilon = epsilon_linear_at_step(
                 EPSILON_START, EPSILON_END, decay_steps, total_steps)
             avg_loss = sum(losses) / len(losses) if losses else 0.0
 
@@ -410,6 +424,8 @@ def main():
                   (ep, episode_reward, episode_steps, epsilon, avg_loss, result,
                    done_reason, final_info.get("min_obstacle_min", 1.0),
                    ACTION_NAMES[dominant_action]))
+
+            agent.schedule_lr(ep, args.episodes)
 
             if (completed_episodes == HEALTH_CHECK_EPISODES and
                     total_steps < MIN_HEALTH_CHECK_STEPS):
