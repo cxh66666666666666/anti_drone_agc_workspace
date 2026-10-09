@@ -21,10 +21,10 @@ public:
      * @brief 构造函数
      * @param nh ROS节点句柄
      * @param takeoff_controller 无人机起飞控制器指针
-     * @param state_ptr MAVROS状态指针（用于获取flight_mode和armed状态）
+     * @param state_ptr MAVROS状态指针（不可为空，用于获取flight_mode和armed状态）
      */
     explicit FlightStatusPublisher(ros::NodeHandle& nh, TakeoffController* takeoff_controller,
-                                   const mavros_msgs::State* state_ptr = nullptr);
+                                   const mavros_msgs::State* state_ptr);
     /**
      * @brief 析构函数
      */

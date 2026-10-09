@@ -1,0 +1,7 @@
+string car_name
+bool model_present
+bool pose_fresh
+bool perception_fresh
+bool control_service_available
+string status_message
+uint16 error_code

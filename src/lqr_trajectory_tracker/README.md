@@ -29,14 +29,18 @@ LQR 最优控制轨迹跟踪节点，驱动 PX4 无人机在 OFFBOARD 模式下�
 | 话题 | 类型 | 用途 |
 |------|------|------|
 | `/mavros/local_position/pose` | `geometry_msgs/PoseStamped` | 无人机当前位置 |
+| `/mavros/local_position/velocity_local` | `geometry_msgs/TwistStamped` | 无人机当前速度（LQR 反馈量） |
 | `/mavros/state` | `mavros_msgs/State` | MAVROS 连接与飞行状态 |
 | `/rl_planner/local_offset` | `geometry_msgs/Vector3Stamped` | RL/规则避障的位置参考偏移（map 系），叠加到参考轨迹；超时自动清零 |
+| `/rl_planner/local_control` | `geometry_msgs/Vector3Stamped` | 速度缩放 / 暂停 / 相位方向指令（x=速度缩放, y>0.5=暂停, z<-0.5=反向） |
+| `/lqr_tracker/waypoints` | `nav_msgs/Path` | A* 全局路径航点（仅 `waypoints` 轨迹类型使用） |
 
 ### 服务
 
 | 服务 | 类型 | 用途 |
 |------|------|------|
 | `/lqr_tracker/reset_trajectory` | `std_srvs/Trigger` | 重置轨迹起始时间，从头开始跟踪当前轨迹 |
+| `/lqr_tracker/reload_trajectory` | `std_srvs/Trigger` | 重新读取几何参数并生成轨迹（换场景用），相位复位到 t=0 |
 
 ### 发布话题
 
@@ -47,6 +51,8 @@ LQR 最优控制轨迹跟踪节点，驱动 PX4 无人机在 OFFBOARD 模式下�
 | `/lqr_tracker/ref_trajectory` | `nav_msgs/Path` | 参考轨迹可视化（RViz） |
 | `/lqr_tracker/adjusted_ref` | `geometry_msgs/PoseStamped` | 叠加局部避障偏移后的参考位置 |
 | `/lqr_tracker/reference_velocity` | `geometry_msgs/Vector3Stamped` | 参考轨迹速度（供感知/规划节点使用） |
+| `/lqr_tracker/reference_mid_lookahead_velocity` | `geometry_msgs/Vector3Stamped` | 前视时间中点的轨迹切线速度 |
+| `/lqr_tracker/reference_lookahead_velocity` | `geometry_msgs/Vector3Stamped` | 前视终点的轨迹切线速度 |
 | `/lqr_tracker/flown_path` | `visualization_msgs/Marker` | 实际飞行轨迹可视化（RViz） |
 | `/lqr_tracker/position_error` | `std_msgs/Float64` | 位置跟踪误差 [m] |
 | `/lqr_tracker/velocity_error` | `std_msgs/Float64` | 速度跟踪误差 [m/s] |
@@ -64,11 +70,10 @@ roslaunch lqr_trajectory_tracker lqr_tracker_sim.launch trajectory_type:=circula
 
 统一启动脚本：`scripts/start_sim.sh lqr`（一键启动 PX4 SITL + Gazebo + MAVROS + 起飞 + LQR Tracker，
 支持 `--trajectory`、`--with-perception`、`--with-experiment-logger` 等选项）。
-旧版独立脚本 `scripts/start_lqr_tracker_sim.sh` 的功能已合并进该统一脚本。
 
 ## 参数
 
-所有参数在 `config/default_params.yaml`，按 6 组管理：
+所有参数在 `config/default_params.yaml`，按 7 组管理：
 
 | 组 | 说明 |
 |----|------|
@@ -76,37 +81,30 @@ roslaunch lqr_trajectory_tracker lqr_tracker_sim.launch trajectory_type:=circula
 | LQR 权重 | 位置/速度误差权重、控制量权重 |
 | 直线轨迹 | 起终点坐标 |
 | 圆形/螺旋 | 圆心、半径、高度、角速度 |
-| 固定8字形 | 左右圆心、半径、高度、角速度 |
+| 固定水平轨迹 | 左右圆心、半径、高度、角速度 |
+| Gerono 八字 | 中心、X/Y 半径、高度、角速度 |
 | 悬停轨迹 (step) | 悬停位置（供 RL 训练使用，位移完全由 `/rl_planner/local_offset` 驱动） |
 
 ## 轨迹类型
 
-| 类型 | 关键字 |
-|------|--------|
-| 直线 | `linear` |
-| 圆周 | `circular` |
-| 螺旋 | `helical` |
-| 水平8字形 | `fixed_horizontal` |
-| 悬停 | `step` |
+| 类型 | 关键字 | 说明 |
+|------|--------|------|
+| 直线 | `linear` | 起点到终点，两端有加/减速段 |
+| 圆周 | `circular` | 定高匀速圆周 |
+| 螺旋 | `helical` | 圆周叠加定高变化 |
+| 固定水平轨迹 | `fixed_horizontal` | 半圆+直线组成的水平跑道/八字形，全程恒速 |
+| Gerono 八字 | `figure_eight` | `x=r_x·sinθ, y=r_y·sinθ·cosθ` 参数曲线 |
+| 悬停 | `step` | 固定位置、零速度/零加速度 |
+| 航点 | `waypoints` | 由 `/lqr_tracker/waypoints` 输入，按弧长等速重采样，不循环 |
 
-## 测试脚本
+## 相关脚本
 
-独立于 ROS 的纯 Python 验证脚本（规划中，尚未提交到本仓库）：
-
-```bash
-# LQR 控制器数值仿真 + 可视化
-python3 scripts/test_lqr_controller.py
-
-# 轨迹生成器验证 + 可视化
-python3 scripts/test_trajectory.py
-```
-
-依赖 `numpy` 和 `matplotlib`。当前已有的实验分析入口为
-`scripts/evaluate_experiment.py`（配合 `experiment_logger_node` 的 CSV 输出计算六项评价指标）。
+实验分析入口为 `scripts/evaluate_experiment.py`（配合 `experiment_logger_node` 的 CSV 输出计算六项评价指标）。
 
 ## 依赖
 
 - ROS Noetic
 - mavros_msgs
+- visualization_msgs（`/lqr_tracker/flown_path` 可视化）
 - Eigen3
 - PX4 SITL（运行时需要）

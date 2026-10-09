@@ -14,6 +14,7 @@ find_package(catkin REQUIRED COMPONENTS
   sensor_msgs
   geometry_msgs
   gazebo_msgs
+  visualization_msgs
   message_generation
 )
 
@@ -61,11 +62,10 @@ add_message_files(
 )
 
 ## Generate services in the 'srv' folder
-# add_service_files(
-#   FILES
-#   Service1.srv
-#   Service2.srv
-# )
+add_service_files(
+  FILES
+  PlanPath.srv
+)
 
 ## Generate actions in the 'action' folder
 # add_action_files(
@@ -78,6 +78,7 @@ add_message_files(
 generate_messages(
   DEPENDENCIES
   std_msgs
+  geometry_msgs
 )
 
 ###################################
@@ -89,6 +90,7 @@ catkin_package(
     std_msgs
     std_srvs
     gazebo_msgs
+    visualization_msgs
     message_runtime
 )
 
@@ -155,10 +157,20 @@ include_directories(
 catkin_install_python(PROGRAMS
   scripts/rl_planner_node.py
   scripts/perception_node.py
+  scripts/perception_utils.py
   scripts/dqn_agent.py
   scripts/gazebo_env.py
   scripts/replay_buffer.py
   scripts/training_utils.py
+  scripts/path_planning.py
+  scripts/geometry_metrics.py
+  scripts/metrics_utils.py
+  scripts/safety_filter.py
+  scripts/safety_policy.py
+  scripts/scenario_generator.py
+  scripts/generate_scenarios.py
+  scripts/astar_planner.py
+  scripts/obstacle_visualizer.py
   scripts/train_dqn.py
   scripts/experiment_logger_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}

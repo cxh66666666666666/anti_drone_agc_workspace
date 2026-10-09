@@ -1,0 +1,30 @@
+# Checklist
+
+- [x] `four/08_v4.1协议补充说明.md` 存在，且在看本轮结果前产出
+- [x] v4.1 写死 hold 定义（唯一控制者、同一预定 hold、目标取终止拍 MAVROS 估计位姿、禁读真值）
+- [x] v4.1 写死主接触源为 origcontact，并要求分列原版接触 / 真值几何相交 / bumper 对照
+- [x] v4.1 写死接触心跳规则与复算口径规则（同一有效集合、`/clock` 连续 2.0 s 停稳、窗口实际仿真时长）
+- [x] v4.1 写死固定清单（已翻转近障 / 未翻转近障 / 黑障，各自相关终止类型）与四项技术门槛
+- [x] v4.1 预先定义新增窄走廊族参数与 ≤24 回合设计、研究范围三选一判据，并注明 ≥1/3 不得事后放宽
+- [x] `episode_tail_probe_v3.py` 存在，支持 `--model-sdf`，保留逐拍 trace 与单回合 run 纪律
+- [x] 每种 `done_reason` 后都发布同一形式 hold 命令；命令位姿≈终止拍 MAVROS 估计位姿
+- [x] hold 控制不读取 Gazebo 真值（只读 MAVROS 估计与 LQR 上报参考量）
+- [x] 每个 hold 命令记录时间/值/发布者；`/mavros/setpoint_position/local` 实际值已落盘并核实保持
+- [x] 核实尾段无第二个发布者与 hold 竞争
+- [x] 烟雾回合覆盖 `shield_infeasible`、`sensor_invalid`/`perception_timeout`、`collision`，各 ≥1 且逐回合给出核查结论
+- [x] 每次 run 保存代码哈希、SDF 哈希、命令参数、场景/种子、时钟、终止/复位原因
+- [x] 主接触源为 `iris_3d_lidar_origcontact`；`contact.csv` 的 `collision1` 为原版 `base_link_inertia_collision`/`rotor_*_collision`
+- [x] `/drone_contact` 空消息落盘为心跳（时间/序号）；可逐尾段窗口判断信号在场/局部失联
+- [x] 分列输出原版接触、bumper 接触（对照）与真值几何相交；有一例窗口级信号在场/失联样例
+- [x] 局部失联/信号缺失被标记为基础设施失败，未写成「无接触」
+- [x] `t6_analyze.py` 对主值与 `{2,4,8} s` 使用同一有效回合集合（排除复位失败与信号缺失/局部失联）
+- [x] 停稳按 `/clock` 连续 `2.0 s`、`speed<0.05 m/s` 判定，不再仅看尾段末行
+- [x] 每个终止后观察窗的实际仿真时长已记录
+- [x] 对 T5 数据给出修订注记（旧 0.227 偏差、旧「12/27」口径更正），未覆盖 T5 原始日志 / 协议 v4.0 / 原分析
+- [x] `four/09_修复后小复核.md` 存在，含固定清单逐回合 v2 复算与门槛判定
+- [x] 四项技术门槛（共同 hold、原版 contact、heartbeat、停稳复算）同时通过与否已明确判定并如实报告
+- [x] 若四项门槛未同时通过：未追加 24 个窄走廊回合，只保留测量修复结论
+- [x] 若运行窄走廊批次：按家族分层报翻转率（未合并），并报右删失比例、基础设施失败率、bumper 与真值几何分歧例数
+- [x] `four/10_研究范围决定.md` 存在，给出研究范围三选一裁决与论文题目/投稿价值重新裁决
+- [x] 新代码/场景/数据位于 `experiments/paper_v3/postterm_outcome/t6_recheck/`；`three/09`、T5 原始数据只读保留
+- [x] 全程无头运行，无 ROS/Gazebo GUI 残留进程；实际投入在各文档中如实登记

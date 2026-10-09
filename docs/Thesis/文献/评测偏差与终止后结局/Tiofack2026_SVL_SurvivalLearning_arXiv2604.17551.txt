@@ -1,0 +1,1459 @@
+                                                  SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+
+                                                      Franki Nguimatsia Tiofack 1 Fabian Schramm 1 Théotime Le Hellard 1 Justin Carpentier 1
+
+
+                                                                    Abstract                                                    5       6       7   8   9
+                                                                                                                            4                                   10
+
+                                                Standard approaches to goal-conditioned rein-                           3                                        11
+                                                                                                                                                                                                                    t
+                                                forcement learning (GCRL) that rely on temporal-                    2                                                12                                  13
+                                                                                                                                                                                                                )
+                                                                                                                                                                   13                                        =t
+arXiv:2604.17551v2 [cs.LG] 29 May 2026
+
+
+
+
+                                                difference learning can be unstable and sample-                                                                 5⋆                             9         )
+                                                                                                                    1
+                                                                                                                                        2                                                        π (s, g
+                                                                                                                                                    3       4
+                                                                                                                                                                                             r( T
+                                                inefficient due to bootstrapping. While recent                                                                     9              5
+                                                                                                                                                                                       sity
+                                                                                                                                                                                            P
+                                                                                                                   ♦            1                                8
+                                                                                                                                                                                   Den
+                                                work has explored contrastive and supervised for-
+                                                                                                                                                                7
+                                                mulations to improve stability, we present a prob-                  1
+                                                                                                                                                        6                                 ∞
+                                                abilistic alternative, called survival value learning                       2
+                                                                                                                                    3       4       5
+                                                                                                                                                                          V π(s, g) = −
+                                                                                                                                                                                          P
+                                                                                                                                                                                                γ t Pr(T π(s, g) > t)
+                                                                                                                                                                                          t=0
+                                                (SVL), that reframes GCRL as a survival learning
+                                                problem by modeling the distribution of time-to-
+                                                                                                                  Figure 1. Illustration of time-to-goal distribution models in
+                                                goal from each state. This structured distribu-                   GCRL. In the general GCRL setting, the time required to reach
+                                                tional Monte Carlo perspective yields a closed-                   a goal is a random variable. As illustrated in the navigation task
+                                                form identity that expresses the goal-conditioned                 (left), an agent may reach the target (⋆) from the start (♦) via
+                                                value function as a discounted sum of survival                    multiple distinct paths, resulting in a multi-modal distribution of
+                                                probabilities, enabling value estimation via a haz-               arrival times (right) with modes at t ≈ 5, 9, 13. Traditional TD
+                                                                                                                  learning approaches estimate the goal-conditioned value function
+                                                ard model trained via maximum likelihood on                       by backpropagating reward signals through all transitions from the
+                                                both event and right-censored trajectories. We in-                goal to the state. Instead, we propose directly exploiting the arrival-
+                                                troduce three practical value estimators, including               time realizations (colored circles). Our survival value learning
+                                                finite-horizon truncation and two binned infinite-                (SVL) approach models this distribution and recovers the value
+                                                horizon approximations to capture long-horizon                    function V π (s, g) as a discounted sum of survival probabilities.
+                                                objectives. Experiments on offline GCRL bench-
+                                                                                                                  signals. Hence, most GCRL works rely on binary signals
+                                                marks show that SVL combined with hierarchical
+                                                                                                                  indicating success only upon achieving the goal.
+                                                actors matches or surpasses strong hierarchical
+                                                TD and Monte Carlo baselines, excelling on com-                   While conceptually appealing, sparse rewards pose notable
+                                                plex, long-horizon tasks. Webpage and code                        optimization challenges. Standard approaches typically mit-
+                                                                                                                  igate sparsity via hindsight relabeling (Andrychowicz et al.,
+                                                                                                                  2017; Ding et al., 2019), which convert each trajectory into
+                                         1. Introduction                                                          multiple goal-labeled transitions by treating achieved states
+                                                                                                                  as alternative goals. However, methods that rely on Tempo-
+                                         Goal-Conditioned Reinforcement Learning (GCRL) has                       ral Difference (TD) learning inherit the fundamental insta-
+                                         emerged as an interesting paradigm for building general-                 bility of bootstrapping. In long-horizon settings common in
+                                         ist agents that learn policies capable of reliably reaching a            GCRL, error propagation can make TD learning slow, un-
+                                         wide range of goals from diverse initial states. Rather than             stable, and hyperparameter-sensitive. Recent Monte Carlo
+                                         relying on carefully shaped reward functions, GCRL formu-                (MC) works sought to avoid bootstrapping by exploiting the
+                                         lates tasks directly in terms of desired outcomes, such as               structure of goal-reaching problems. Prior approaches refor-
+                                         target positions or object configurations. This is appealing             mulate GCRL objectives using supervised learning (Ghosh
+                                         for autonomous agents and robotic systems, where specify-                et al., 2021; Yang et al., 2022; Hejna et al., 2023) or con-
+                                         ing goals is often more natural than designing dense reward              trastive learning (Eysenbach et al., 2022), enabling more
+                                            1                                                                     stable optimization.
+                                             Inria and École Normale Supérieure, PSL Research University,
+                                         Paris, France. Correspondence to: Franki Nguimatsia Tiofack              In this work, we introduce a complementary probabilis-
+                                         <franki.nguimatsia-tiofack@inria.fr>.                                    tic perspective that interprets GCRL through the lens of
+                                         Proceedings of the 43 rd International Conference on Machine             time-to-event modeling, also known as survival analy-
+                                         Learning, Seoul, South Korea. PMLR 306, 2026. Copyright 2026             sis (Lee & Wang, 2003; Wang et al., 2019). This statistical
+                                         by the author(s).                                                        framework studies the distributions of variables representing
+
+                                                                                                              1
+                             SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+the time until a specific event occurs. Our key observation            ysis notations. Sec. 4 presents the core contribution, estab-
+is that in sparse, terminate-on-success settings, the expected         lishing the connection between GCRL and survival learning
+discounted return is fully determined by the distribution of           and introducing the corresponding value estimators inspired
+the goal-hitting time under the policy. Maximizing the re-             by survival analysis. Sec. 5 evaluates the proposed estima-
+turn thus corresponds to optimizing a discounted functional            tors on standard offline RL benchmarks, and Sec. 6 draws
+of the hitting-time distribution. The discount factor γ in-            conclusions and future work.
+duces an implicit risk sensitivity over arrival times. Unlike
+in standard RL, intermediate states in GCRL settings do not            2. Related work
+yield additional rewards; the value function is therefore a
+statistical summary of the arrival-time distribution and can           2.1. Goal-conditioned reinforcement learning
+be estimated directly, as illustrated in Fig. 1. Successful tra-
+                                                                       The problem of learning policies for multiple goals was for-
+jectories yield exact event times, whereas those truncated by
+                                                                       malized by universal value function approximators (Schaul
+a finite horizon become right-censored observations. This
+                                                                       et al., 2015), which extended value functions to accept goal
+correspondence naturally aligns policy evaluation in GCRL
+                                                                       arguments. To mitigate the reward sparsity of goal-reaching
+with the methodological foundations of survival analysis.
+                                                                       tasks, Hindsight Experience Replay (Andrychowicz et al.,
+In this work, we derive a closed-form expression of the goal-          2017) proposed relabeling failed trajectories as successful
+conditioned value function as a discounted sum of survival             ones for the states that were actually reached. Since then,
+probabilities associated with the goal-hitting time. We show           numerous works have studied GCRL primarily through
+that the value function is a statistical summary of an underly-        temporal-difference learning and goal-conditioned value
+ing temporal distribution. Consequently, rather than directly          estimation (Andrychowicz et al., 2017; Lin et al., 2019;
+regressing a scalar value via Bellman backups, we explicitly           Riedmiller et al., 2018; Park et al., 2023; Ke et al., 2025;
+learn the full distribution of goal-reaching times, naming             Ahn et al., 2025).
+our approach Survival Value Learning (SVL). We model
+                                                                       Beyond TD-based approaches, alternative formulations have
+the instantaneous probability of reaching the goal, namely
+                                                                       been explored. Imitation and behavioral cloning meth-
+the hazard function, via maximum likelihood estimation
+                                                                       ods leverage goal-conditioned supervision from trajecto-
+(MLE) over both event and censored trajectories, thereby
+                                                                       ries (Ding et al., 2019; Ghosh et al., 2021; Lynch et al.,
+inheriting standard MLE convergence properties.
+                                                                       2020; Savinov et al., 2018; Jang et al., 2022). Model-
+SVL incorporates hindsight relabeling to convert each tra-             based approaches incorporate planning or learned dynamics
+jectory into multiple goal-labeled survival observations, pro-         to guide goal-reaching behaviour (Mendonca et al., 2021;
+viding dense supervision without altering the underlying               Charlesworth & Montana, 2020; Zhu et al., 2021; Doso-
+objective. Unlike prior work using relabeling to train value           vitskiy & Koltun, 2017; Schmeckpeper et al., 2020). A
+functions (Andrychowicz et al., 2017; Ren et al., 2019; Zhao           complementary line of work combines learned value func-
+& Tresp, 2018; Fang et al., 2019; Park et al., 2023; Yang              tions with graph search over replay-buffer (Eysenbach et al.,
+et al., 2022; Hejna et al., 2023) or representations (Eysen-           2019; Baek et al., 2025). Representation learning methods
+bach et al., 2022; Mazoure et al., 2023; Sikchi et al., 2023),         shape exploration and goal achievement by learning goal-
+we use it to generate event-time and censoring signals.                conditioned embeddings, successor-style representations, or
+                                                                       by modeling goal-conditioned value functions through con-
+Our key contributions are: (i) we introduce SVL, a theoreti-
+                                                                       trastive learning (Barreto et al., 2017; Hansen et al., 2020;
+cal framework connecting GCRL with survival analysis. We
+                                                                       Eysenbach et al., 2021; 2022; Liu & Abbeel, 2021; Blier
+propose a practical architecture to learn the hazard function
+                                                                       et al., 2021; Wang et al., 2025) and Ma et al. (2022) recast
+and derive several value estimators trained via maximum
+                                                                       offline GCRL as matching a discounted state-visitation dis-
+likelihood, bypassing unstable TD bootstrapping. (ii) By
+                                                                       tribution. Some works combine multiple approaches; for
+integrating our SVL estimators with hierarchical actors, we
+                                                                       example, offline GCRL methods often integrate TD learn-
+introduce Hierarchical Survival Value Learning (HSVL), a
+                                                                       ing with hindsight relabeling to address data scarcity (Park
+practical offline GCRL algorithm. (iii) Through extensive
+                                                                       et al., 2023; Ke et al., 2025), while contrastive RL ap-
+evaluations and ablation studies on offline GCRL bench-
+                                                                       proaches couple representation learning with relabeling to
+marks, we show that survival-based value estimation is com-
+                                                                       learn goal-conditioned representations without relying on
+petitive with strong hierarchical TD and MC baselines and
+                                                                       a TD objective (Eysenbach et al., 2022). Supervised and
+delivers notable improvements on long-horizon tasks, with-
+                                                                       imitation-based formulations similarly use hindsight rela-
+out additional hyperparameter tuning.
+                                                                       beling to construct dense training targets from sparse trajec-
+The remainder is organized as follows. Sec. 2 re-                      tories (Ghosh et al., 2021; Emmons et al., 2022).
+views related work, and Sec. 3 introduces background on
+                                                                       Closest to our work is distance-weighted supervised learning
+goal-conditioned reinforcement learning and survival anal-
+
+                                                                   2
+                             SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+(DWSL) (Hejna et al., 2023), which also models the distribu-          and r : S × A × G → R is the goal-conditioned reward
+tion of number of step between state pairs in a Monte-Carlo,          function. Desired goals are sampled from the distribution
+non-TD fashion. SVL differs as it handles unreached goals             pg ∈ ∆(G) with initial states drawn from µ : G → ∆(S).
+via right censoring, rather than restricting supervision to           Finally, γ ∈ [0, 1) is the discount factor and ϕ : S → G is
+state pairs from the same trajectory and recovers the goal-           a tractable mapping that projects the state into goal space.
+conditioned value function in closed form from the learned            This mapping accounts for settings where goals represent
+survival function, instead of relying on a soft-minimum               only partial observations or specific features of the state. For
+distance surrogate that lower-bounds the value function.              example, in robotic manipulation, S might represent joint
+                                                                      angles while G represents end-effector coordinates. In this
+2.2. Survival analysis and time-to-event learning                     case, ϕ corresponds to the forward kinematics function.
+Survival analysis (Lee & Wang, 2003), also known as time-             Following prior work (Andrychowicz et al., 2017; Liu et al.,
+to-event analysis, is a classical area of statistics concerned        2022), we adopt a sparse reward formulation in which
+with modeling the distribution of event times, typically              r(st , at , g) = −1{∥ϕ(st+1 )−g∥≥ϵ} . That is, the agent re-
+through survival and hazard functions (Kaplan & Meier,                ceives a penalty of −1 whenever the next state st+1 fails
+1958; Cox, 1972; Nelson, 1969; Andersen et al., 2012; Tutz            to satisfy the goal g (within tolerance ϵ). The objective
+et al., 2016). It has been widely applied in medicine and             of GCRL is to learn a goal-conditioned policy, denoted by
+epidemiology (e.g, time to death), reliability engineering            π : S ×G → ∆(A), that maximizes the expected discounted
+(time to failure), and the social sciences (event-history anal-       cumulative return:
+ysis) (Kalbfleisch & Prentice, 2002; Singer & Willett, 2003).                                             ∞
+                                                                                                         hX                   i
+In this statistical branch, foundational tools include nonpara-               J(π) = Eg∼pg , τ ∼ρπ (·|g)    γ t r(st , at , g) , (1)
+metric estimators (Kaplan & Meier, 1958; Andersen et al.,                                                   t=0
+2012), semi-parametric regression models such as the Cox              where
+                                                                                                       Q∞
+                                                                                 ρπ (τ |g) = µ(s0 | g) t=0 π(at | st , g)P(st+1 | st , at )
+proportional hazards model (Cox, 1972), discrete-time or              is the probability of sampling a trajectory
+grouped-time formulations (Tutz et al., 2016; Singer & Wil-           τ = (s0 , a0 , s1 , a1 , . . . ).   Intuitively, this objective
+lett, 2003), which we leverage in this work. These models             corresponds to sampling a goal g and then optimizing the
+come with a well-developed theory for censored likelihoods            policy to reach that goal as quickly as possible (Eysenbach
+and asymptotic guarantees (Kalbfleisch & Prentice, 2002;              et al., 2022). Accordingly, for a given policy π, we denote
+Andersen et al., 2012; Fleming & Harrington, 2013).                   the goal-conditioned value-function as follows:
+More recently, survival analysis has been extended using                                                "∞
+                                                                                                         X
+                                                                                                                                  #
+deep learning, including neural Cox models and direct haz-                   π
+                                                                          V (s, g) = Eτ ∼ρπ (·|g)            t
+                                                                                                            γ r(st , at , g)|s0 =s . (2)
+ard or survival function learning (Katzman et al., 2018;                                              t=0
+Kvamme et al., 2019; Ranganath et al., 2016; Lee et al.,
+2018). Our work builds on this literature by interpreting             3.2. Survival analysis notations in the context of GCRL
+goal-reaching rollouts as survival data. Unlike prior alter-
+native discounting schemes (Schultheis et al., 2022), for-            First hitting time. In analogy with survival analysis (Ka-
+mulated via policy-independent survival terminology (Fe-              plan & Meier, 1958; Katzman et al., 2018; Kvamme et al.,
+dus et al., 2019), SVL uses the standard discounted GCRL              2019), given a state s, a goal g, and a goal-conditioned
+objective to model the policy-dependent first-hitting-time            policy π, we define the first hitting time to reach the goal as:
+distribution.
+                                                                                      n                                                    o
+                                                                                                                      s0 =s, at ∼π(·|st ,g)
+                                                                      T π (s, g) = inf t ≥ 0 : ∥ϕ(st+1 )−g∥ < ϵ        st+1 ∼P(·|st ,at )   .
+                                                                                                                                          (3)
+3. Preliminaries                                                      We adopt the convention T π (s, g) = ∞ if the goal g is
+                                                                      never reached from the initial state s. Thus, T π (s, g) is the
+This section provides an overview of GCRL and survival
+                                                                      (possibly infinite) time of first arrival to g when starting
+analysis, and introduces the main notations of the paper.
+                                                                      from s and following π under dynamics P. Unlike standard
+                                                                      survival analysis, where event times typically start at 1, we
+3.1. Goal-conditioned reinforcement learning                          allow t = 0 to account for instant hits, in which the goal is
+The GCRL problem is formulated as an augmented                        satisfied immediately after the initial state s0 .
+Markov Decision process (MDP), defined by the tuple                   Formally, for a fixed goal and policy (g, π), the system
+M = (S, A, G, P, r, pg , µ, ϕ, γ). Here, S, A, and G denote           evolves as a Markov chain on states (st )t≥0 , defined by the
+the state, action, and goal spaces, respectively. Let ∆(X )           transition kernel:
+represent the set of probability distributions over a set X .                                   Z
+P : S × A → ∆(S) represents the transition dynamic                             P π,g (s′ |s) :=   π(a|s, g) P(s′ |s, a) da.     (4)
+                                                                                                  A
+
+                                                                  3
+                            SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+The goal hitting time T π (s, g) is a stopping time with re-         4.1. Relating goal-conditioned value functions to
+spect to the natural filtration of the process (st )t≥0 .                 survival functions
+Survival and hazard functions. As in standard discrete               We formalize the link between GCRL and survival analysis.
+time-to-event modeling (Tutz et al., 2016) and survival anal-        Under the standard sparse-reward formulation, the goal-
+ysis more broadly (Andersen et al., 2012), we study T π (s, g)       conditioned value function admits a closed-form expression
+through its associated survival and hazard functions, which          in terms of the survival function of the goal-hitting time.
+provide an equivalent characterization of its distribution.          Proposition 4.1. Consider the GCRL setting where
+The survival function is defined by                                  the agent receives a per-step penalty until success,
+             S π (t|s, g) = Pr T π (s, g) > t ,
+                                             
+                                                          (5)        r(st , at , g) = −1{∥ϕ(st+1 )−g∥≥ϵ} , and the episode termi-
+                                                                     nates upon goal achievement. The goal-conditioned value
+and corresponds to the probability that the goal has not been        function is equal to the negative discounted sum of the sur-
+reached by time t. The discrete-time hazard function is              vival function:
+                                                                                                   X∞
+                                                                                    V π (s, g) = −     γ t S π (t|s, g).
+                                                   
+    hπ (t|s, g) = Pr T π (s, g) = t T π (s, g) ≥ t . (6)                                                                      (9)
+                                                                                                    t=0
+
+It measures the likelihood of reaching the goal at time t
+given that it has not yet been reached. Note that the hazards        Proof. We refer readers to Appendix A.2.
+fully determine the law of T π (s, g) as                             Prop. 4.1 is exact when the return is fully determined by the
+                                                                     goal-hitting time T π (s, g). For arbitrary dense rewards that
+                            t
+                            Y                                        depend on the full trajectory, the return is not identifiable
+           S π (t|s, g) =         1 − hπ (k|s, g) ,
+                                                 
+                                                          (7)        from the distribution of T π (s, g) alone.
+                            k=0
+                                                                     This identity implies that estimating the survival function
+this recursion is detailed in Appendix A.1. This yields the          (equivalently, the hazard function) yields a direct approxima-
+event-time probabilities                                             tion of the value function. It offers an intuitive interpretation
+                                                                     of the objective: maximizing V π (s, g) amounts to minimiz-
+       Pr T π (s, g) = t = hπ (t|s, g)S π (t − 1|s, g). (8)
+                        
+                                                                     ing the discounted cumulative probability of not having
+Episode termination. In practice, rollouts are truncated             reached the goal over time. In other words, this incentivizes
+after a finite horizon c (e.g., due to timeout, or episode           the agent to minimize the task’s survival time, with the
+termination). If the goal is not reached by time c, we only          discount factor giving greater weight to earlier successes.
+observe that T π (s, g) > c, providing no information about
+subsequent steps. This corresponds to right censoring at             4.2. Learning the hazard function
+time c (Nelson, 1972; Efron, 1977; Harrington & Fleming,             We derive a population objective for learning hazards, de-
+1982; Peto & Peto, 1972; Cox, 1972; Mantel et al., 1966).            ferring modeling and approximation choices to Section 4.3.
+Mathematically, a censored observation contributes to the
+likelihood via the survival function S π (c|s, g), whereas an        Observation. Lets consider a sample (g, s) ∼ pg × µ and
+uncensored observation (goal reached at t ≤ c) contributes           roll out π(·|st , g) under dynamics P for a horizon c. Let
+via the event probability Pr(T π (s, g) = t).                        δ ∈ {0, 1} indicate whether the goal is reached within c
+                                                                     steps, and let τ denote the (first) hitting time when δ = 1.
+4. Goal-Conditioned RL as Survival Learning                          Thus, δ = 1 implies τ ≤ c (uncensored), while δ = 0
+                                                                     corresponds to right censoring at c. The likelihood of an
+This section draws the connection between GCRL and sur-              observation (τ, c, δ) is then given by
+vival learning, and introduces our Survival Value Learning
+(SVL) approach. We first establish in Proposition 4.1 a               Pr(τ, c, δ|s, g) = Pr T π (s, g) = τ
+                                                                                                             δ
+                                                                                                                  S π (c|s, g)1−δ (10)
+link between the goal-conditioned value function and the
+survival function of the goal-hitting time. Then, by exploit-
+ing the survival-hazard recursion together with the event-           Parametric hazard and negative log-likelihood. Let
+time probabilities in Eq. (8), we derive a log-likelihood            hπθ (t|s, g) be a parametric hazard model parameterized by
+objective for learning a goal-conditioned hazard function.           θ. Using the standard discrete-time identities provided in
+We address practical considerations and present tractable            Eq. (7) and Eq. (8), the maximum likelihood estimation
+hazard-function parameterizations, along with plug-in esti-          (MLE) amounts to minimizing the population negative log-
+mators that recover goal-conditioned values from the learned         likelihood L(θ) = −E[log Prθ (τ, c, δ, s, g)], expanding to
+hazards. Finally, we derive an offline GCRL algorithm to                                       h                      i
+empirically evaluate the proposed framework.                              L(θ) = −E(s,g,τ,c,δ) δℓτ (θ) + (1 − δ)ℓc (θ)       (11)
+
+                                                                 4
+                                 SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+with                                                                        achieved goals. This transforms each trajectory into many
+                                 τ −1
+                                 X                                          goal-labeled survival tuples (si , gi , τi , ci , δi ), increasing the
+  ℓτ (θ) = log hπθ (τ |s, g) +          log (1 − hπθ (k|s, g)) , (12)       amount of event-time and right-censoring supervision avail-
+                                 k=0
+             c                                                              able for maximum-likelihood hazard learning.
+             X
+  ℓc (θ) =         log (1 − hπθ (k|s, g)) .                     (13)        Value estimation. Given θ̂n , Proposition     4.1 yields the
+             k=0                                                            plug-in estimator Vθ̂π (s, g) = − t≥0 γ t Sθ̂π (t|s, g).
+                                                                                                             P
+                                                                                                   n                             n
+It is worth noting that the expectation is taken with
+                                                                            Our SVL approach provides an alternative estimator of the
+respect to the tuple (τ, c, δ, s, g), using the identity
+                                                                            goal-conditioned value function that does not rely on boot-
+Prθ (τ, c, δ, s, g) = pg (g) µ(s|g) Prθ (τ, c, δ|s, g).
+                                                                            strapping. Instead, it follows from maximum-likelihood
+Censoring and empirical risk minimization. In GCRL,                         estimation of the hazard model and inherits the classical
+censoring is induced by the episode horizon c. Since the                    guarantees of MLE under standard regularity conditions
+horizon is determined by the environment configuration                      (e.g., consistency and asymptotic normality).
+(or sampling strategy) and is independent of T π (s, g), it
+satisfies the condition of non-informative right censoring;                 4.3. Practical value estimation and hazard function
+informative terminations such as catastrophic failures fall                      architecture
+outside this assumption and instead call for a competing-                   In this section, we address two practical challenges to ap-
+risks formulation (Andersen et al., 2012), which we leave                   proximate the plug-in estimator Vθ̂π defined in Proposi-
+to future work. As in standard RL, we optimize an em-                                                           n
+                                                                            tion 4.1: how to model the hazard function and how to
+pirical objective by sampling tuples (si , gi , τi , ci , δi ) either
+                                                                            handle the infinite discounted sum.
+from an offline dataset or a replay buffer, which we treat as
+approximately i.i.d.
+                                                                            Finite-horizon MDP. In the finite-horizon setting of
+Lemma 4.2 (MLE/ERM properties). Assume (i) non-                             length H, the identity in Eq. (9) is a finite sum, yielding:
+informative right censoring, and (ii) standard regularity
+                                                                                                             H−1
+conditions for parametric MLE (correct specification, iden-                                                  X
+tifiability, and smoothness of hθ ). Let θ∗ be the true param-                           Vθ̂π,H (s, g) = −          γ t Sθ̂π (t|s, g)       (15)
+                                                                                            n                             n
+
+eter (i.e, hπθ∗ = hπ , with hπ defined in Eq. (6)) and                                                        t=0
+
+                n 1X n                                   o                  The straightforward approach is to model the hazard func-
+  θ̂n ∈ arg min −       log Prθ (τi , ci , δi , si , gi ) . (14)            tion with a neural network predicting an H-dimensional
+            θ∈Θ   n i=1                                                     vector {hπθ (t|s, g)}H−1
+                                                                                                  t=0 . Note that θ̂n is an optimal esti-
+                                                                            mator, while θ are learned parameters. Each entry is the
+Then θ̂n is consistent for θ⋆ (under correct specification, or              conditional probability of reaching the goal at time t, with
+the KL minimizer √ in case of misspecification), and is asymp-              t = 0 . . . H − 1, given that it was not reached earlier. In that
+totically normal: n(θ̂n − θ⋆ ) ⇒ N (0, Σ). Under correct                    case, the training objective Eq. (11) remains unchanged.
+specification, Σ equals the inverse Fisher information.
+                                                                            Yet, this approach does not extend directly to the infinite-
+Lemma 4.2 implies that, as the number of survival tuples                    horizon settings, as it ignores any value accumulated beyond
+grows, the estimated hazard (and thus the estimated value)                  the horizon H. Furthermore, it requires fixing H a priori,
+concentrates around its true value, with statistical fluctua-               and optimization becomes increasingly difficult as the hori-
+tions that scale as O(n−1/2 ) under standard conditions. In                 zon lengthens. To address these limitations while targeting
+Section 5, we highlight this sample scaling property on the                 infinite-horizon settings, we propose reducing the output
+long-horizon humanoidmaze-giant task.                                       dimensionality by aggregating time steps into intervals.
+For standard references regarding Lemma 4.2 in the pres-                    Geometric-time binning. To reduce complexity while pre-
+ence of right censoring, we refer readers to (Andersen et al.,              serving resolution at early time steps, we adopt grouped-
+2012) (Chapter 6),(Tutz et al., 2016) (Chapter 3), together                 time modeling from discrete-time survival analysis (Tutz
+with MLE theory (Fisher, 1925; Wald, 1949; Cramér, 1999).                  et al., 2016). Let K be the number of bins, 0 = b0 <
+                                                                            b1 < · · · < bK = H be bin edges with intervals [bk , bk+1 )
+Hindsight relabeling. Directly minimizing the empirical
+                                                                            and lengths Lk = bk+1 − bk . We use geometric edges
+risk in Eq. 14 using only desired goals g ∼ pg can be data-
+                                                                            bk = ⌊ρk ⌋, ρ = H 1/K which allocates many short bins
+inefficient, since most rollouts may not reach the specified
+                                                                            early (where γ t is large) and fewer long bins late (where the
+goal and thus provide weak supervision. Following prior
+                                                                            discounted tail contributes less). The hazard network is now
+work on goal relabeling (Andrychowicz et al., 2017; Park
+                                                                            designed to output K + 1 < H logits.
+et al., 2023; Mazoure et al., 2023), we incorporate hind-
+sight goal relabeling by treating visited states as additional              Based on geometric time binning, we consider two binned
+
+                                                                        5
+                                                           SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+                                   Finite-H (no bins)      Hazard-binned (PCH)     Survival-binned (PCS)
+                                                                                                                       4.4. Hierarchical policy for offline GCRL
+                                   AntMaze                                          HumanoidMaze
+                   100
+
+                                                                                                                       So far, we have derived a survival-based objective for learn-
+Success Rate (%)
+
+
+
+
+                   80
+
+
+
+                   60
+                                                                                                                       ing goal-conditioned value functions (SVL). While these
+                   40
+                                                                                                                       estimators theoretically capture the task’s underlying tempo-
+                   20
+                                                                                                                       ral structure, their practical utility is best demonstrated by
+                    0
+                                                                                                                       their ability to guide an agent toward goals. To evaluate the
+                         medium     large               giant            medium           large            giant
+                                                                                                                       quality of our representations in a decision-making context,
+Figure 2. Comparative analysis of the three estimators. Success                                                        we instantiate them within a learning algorithm. We propose
+rates (%) on AntMaze and HumanoidMaze navigation tasks at                                                              Hierarchical Survival Value Learning (HSVL), an offline
+increasing scales (medium/large/giant), comparing finite-horizon
+                                                                                                                       GCRL algorithm that extracts a hierarchical policy from
+(no bins), hazard-binned (PCH), and survival-binned (PCS). The
+three variants perform comparably across all scales. Full numerical                                                    our SVL value estimator. We adopt a two-level architecture,
+results are provided Tab. 4. The visualization scheme is adapted                                                       following the HIQL approach (Park et al., 2023), in which
+from (Ahn et al., 2025).                                                                                               a high-level policy selects subgoals to maximize the value,
+                                                                                                                       and a low-level policy executes actions to achieve subgoals.
+infinite-horizon variants. Both model the prefix on                                                                    Policy extraction. Given the learned survival value func-
+[0,
+P∞  H] with K bins and approximate the discounted tail                                                                 tion Vθ , we extract a hierarchical policy using advantage-
+         t                                                                                                             weighted regression (AWR) (Peng et al., 2019), though
+   t=H γ S(t) using the final interval [H, ∞).
+                                                                                                                       the survival critic is also compatible with other offline
+Piecewise-constant per-step hazard (PCH). We assume                                                                    RL policy-extraction schemes that exploit high-value ac-
+the per-step hazard is constant within each bin:                                                                       tions (Tiofack et al., 2025). We learn a high-level subgoal
+                                                                                                                       policy πθh (st+k |st , g) that proposes intermediate goals ev-
+                                                                                                                       ery k steps, and a low-level action policy πθℓ (at |st , st+k )
+                         hπθ (t|s, g) = h̄πθ (k|s, g),                           t ∈ [bk , bk+1 ).                     that executes actions to reach these subgoals. The parame-
+                                                                                                                       ters θh and θℓ are optimized by maximizing:
+Piecewise-constant survival per bin (PCS). We assume
+the survival function is constant within each bin:
+                                                                                                                                                   h                            i
+                                                                                                                         Jh (θh ) = E(st ,st+k ,g) wth log πθh (st+k |st , g) ,             (16)
+
+                         Sθπ (t|s, g)        Sθπ (bk |s, g),
+                                                                                                                                                          h                             i
+                                        =                                         t ∈ [bk , bk+1 ).                      Jℓ (θℓ ) = E(st ,at ,st+1 ,st+k ) wtℓ log πθℓ (at |st , st+k )     (17)
+
+Per variant, we derive a grouped-time log-likelihood objec-                                                            The weights w represent the advantage of the transition,
+tive involving only the K bin parameters and the correspond-                                                           computed using value differences:
+ing plug-in estimator of the goal-conditioned value function.
+                                                                                                                           wth = exp β Vθ (st+k , g) − Vθ (st , g) ,
+                                                                                                                                                                   
+Their closed-form expressions are detailed in Appendix A.5.                                                                                                                 (18)
+                                                                                                                             ℓ
+                                                                                                                                                                         
+Hazard function architecture. To efficiently parameterize                                                                  wt = exp β Vθ (st+1 , st+k ) − Vθ (st , st+k ) , (19)
+temporal hazard, we propose a conditional low-rank basis
+                                                                                                                       where β > 0 is an inverse-temperature parameter and with
+selection that extends standard discrete-time survival frame-
+                                                                                                                       Vθ computed via the survival identity (9). The complete
+works (Fotso, 2018; Gensheimer & Narasimhan, 2019) and
+                                                                                                                       procedure is summarized in Algorithm 1.
+mixture-of-experts formulations (Lee et al., 2018; 2025).
+While traditional models often predict independent logits or                                                           Design choices. We choose this specific architecture for
+rely on fixed parametric distributions (Nagpal et al., 2021)                                                           three key reasons. First, it isolates the contribution of our
+or static polynomial bases (Campanella et al., 2025), our                                                              survival-based estimator. Because policy extraction depends
+architecture, illustrated in Figure 4, dynamically assembles                                                           only on the plug-in value Vθ , any performance improve-
+a temporal structure by performing a double contraction                                                                ments can be directly attributed to the quality of the value
+between state-goal dependent weights and a learned basis                                                               estimation rather than additional algorithmic choices (e.g.,
+library Ψ ∈ RS×H×K . Specifically, given a state-goal en-                                                              target networks, or delicate actor-critic update schedules).
+coding z, the model produces selection weights w(z) ∈ RS
+                                                                                                                       Second, a value-only interface is particularly robust for of-
+and mixing coefficients c(z) ∈ RK , which are combined
+                                                                                                                       fline learning. Unlike Q-learning, which suffers from boot-
+with the library to obtain hazard logits via the conditioned
+                                                                                                                       strapping errors on out-of-distribution actions, our approach
+low-rank factorization ℓ1:H (z) = w(z)⊤ Ψc(z). This ap-
+                                                                                                                       relies on value differences computed over in-distribution
+proach allows the network to represent diverse temporal
+                                                                                                                       dataset transitions, providing a stable signal for advantage-
+structures. We provide a more detailed explanation of the
+                                                                                                                       weighted regression (Park et al., 2023).
+proposed architecture in Appendix A.4. Note that the hazard
+representation with a deep neural network remains an active                                                            Third, this design leverages hindsight relabeling as a stan-
+line of research in the survival analysis community (Lee                                                               dalone proxy for optimality. Prior work indicates that rela-
+et al., 2018; 2025; Campanella et al., 2025).                                                                          beling can drive goal-reaching behavior without explicit
+
+                                                                                                                   6
+                                SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+Algorithm 1 Hierarchical Survival Value Learning                      contrastive RL (CRL) (Eysenbach et al., 2022), and hierar-
+ 1: Input: offline dataset D, learning rates ηh ,λh ,λℓ               chical implicit Q-learning (HIQL) (Park et al., 2023). HIQL
+ 2: Initialize hazard hθ , high- and low-level policy πθh , πθℓ       is the closest algorithmic baseline to HSVL as it shares the
+      // Train the hazard function using Eq.(11)                      same hierarchical value-to-policy extraction template (Algo-
+  3: while not converged do                                           rithm 1). It differs only in how the value function is learned,
+  4:   Sample (s, g, τ, c, δ) ∼ D                                     via TD-style bootstrapping rather than survival value learn-
+  5:   θ ← θ − ηh ∇θ L(θ)                                             ing. The HIQL vs. HSVL comparison directly isolates the
+  6: end while                                                        contribution of the survival formulation, holding the hierar-
+      // Train the high-level policy using Eq. (16)                   chical actor fixed. CRL is the closest non-TD baseline that
+  7: while not converged do                                           avoids bootstrapping. To isolate the survival critic’s contri-
+                                                                      bution relative to this strong MC baseline, we introduce a
+  8:                  P, g) ∼ D
+      Sample (st , st+k
+  9:  Vθ (st , g) ← − j≥0 γ j Sθ (j|st , g)                           flat variant of SVL (no hierarchy) and re-evaluate CRL with
+10:   Vθ (st+k , g) ← − j≥0 γ j Sθ (j|st+k , g)
+                       P                                              the same flat DDPG+BC actor, so that the two methods dif-
+11:   θh ← θh + λh ∇θh Jh (θh )                                       fer only in their critics (Sec. 5.2). We report the normalized
+12: end while                                                         success rate averaged over 4 seeds. SVL implementation
+                                                                      will be released upon paper acceptance, together with the
+      // Train the low-level policy using Eq. (17)
+                                                                      derived HSVL adapted from HIQL.
+13: while not converged do
+14:                       P, st+k ) ∼ D
+     Sample (st , at , st+1
+                                                                      5.1. Main results
+15:  Vθ (st , st+k ) ← − j≥0 γ j Sθ (j|st , st+k )
+                                         j
+                                P
+16:     Vθ (st+1 , st+k ) ← −     j≥0   γ Sθ (j|st+1 , st+k )         Tab. 1 summarizes the performance across state-based and
+17:   θℓ ← θℓ + λℓ ∇θℓ Jℓ (θℓ )                                       visual domains; full results are provided in Tabs. 6, 7, and
+18: end while                                                         8 of the Appendix. HSVL matches or exceeds the perfor-
+19: Output: (πθh , πθℓ )                                              mance of prior methods on standard tasks with substantial
+                                                                      gains on complex, long-horizon problems. Note that we fix
+                                                                      the inverse temperature parameter, β, to 3 across all experi-
+Bellman updates (Ghosh et al., 2021; Eysenbach et al.,                ments. Likewise, we kept OGBench default values for all
+2022). Accordingly, our method focuses on learning the                hyperparameters not specific to SVL, as reported in Tab. 3.
+survival value of the dataset trajectories, avoiding the risky        Scaling to long horizons. We show substantial improve-
+action-maximization steps of Q-learning. Empirically, this            ments on tasks requiring extended temporal reasoning. On
+formulation outperforms complex baselines, providing evi-             antmaze-giant-navigate, HSVL outperforms the strongest
+dence that hindsight relabeling implicitly produces a value           baseline (HIQL) by a clear margin (74% vs. 65%). This
+function superior to the behavior policy. This verifies that          gap widens for the complex humanoidmaze-giant naviga-
+safe policy extraction is possible through hazard-based eval-         tion task: HSVL achieves 81% success rate, whereas HIQL
+uation, without the extrapolation risks of typical offline RL.        reaches only 12%, and non-hierarchical methods fail (0–
+                                                                      3%). Since HSVL and HIQL share the same hierarchical ex-
+5. Experiments                                                        traction template and differ only in how the value is learned,
+                                                                      we read the widening gap on longer horizons as controlled
+We evaluate our HSVL on the challenging OGBench bench-                evidence that survival-based MLE mitigates the compound-
+mark (Park et al., 2025a), which includes high-dimensional            ing bootstrap errors of TD over long horizons, consistent
+state-based and visual offline goal-conditioned RL tasks.             with recent findings that 1-step TD errors grow sharply with
+Our experiments aim to answer four key questions: (i) Can             horizon (Park et al., 2025b).
+SVL scale to long-horizon, sparse-reward tasks where stan-
+dard TD learning typically fails? (ii) Does SVL generalize            Visual generalization. We further evaluate HSVL on
+to high-dimensional visual observations? (iii) How much               pixel-based benchmarks to test its ability to learn from
+of HSVL’s performance is attributable to the survival critic          high-dimensional observations. On visual-antmaze-giant,
+itself, as opposed to the hierarchical policy extraction? (iv)        our method achieves 61% success, surpassing the best
+How sensitive is the performance to architectural choices             hierarchical baseline (HIQL, 6%) and contrastive base-
+(e.g., network depth, hazard function parameterization)?              line (CRL, 47%). Furthermore, on the challenging visual-
+                                                                      humanoidmaze-medium, HSVL is the only method to ex-
+We compare HSVL against six offline GCRL baselines:                   tract meaningful signal (22% and 15% resp for navigate
+goal-conditioned behavioral cloning (GCBC) (Lynch et al.,             and stitch), while all baselines fail (0–1%). This suggests
+2020; Ghosh et al., 2021), goal-conditioned implicit V, Q-            that the hazard-based objective provides a robust learning
+learning (GCIVL, GCIQL) (Kostrikov et al., 2022; Park                 signal even when combined with convolutional encoders,
+et al., 2023), quasimetric RL (QRL) (Wang et al., 2023),
+
+                                                                  7
+                              SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+Table 1. Results on state-based and visual-based offline goal-conditioned RL. HSVL outperforms six baselines across benchmark
+tasks, achieving substantial gains on complex, long-horizon tasks like humanoidmaze-giant-navigate-v0 (highlighted lines). Mean results
+± std over 4 seeds and we refer to the Appendix for the full results (Tabs. 6, 7, and 8, and training details Tab. 3).
+
+        Environment                                  GCBC      GCIVL       GCIQL    QRL        CRL        HIQL     HSVL (ours)
+        antmaze-medium-navigate-v0                    29 ± 4   72 ± 8      71 ± 4   88 ± 3   95 ± 1       96 ± 1        96 ± 1
+        antmaze-large-navigate-v0                     24 ± 2   16 ± 5      34 ± 4   72 ± 6   83 ± 4       91 ± 2        92 ± 1
+        antmaze-giant-navigate-v0                     0±0       0±0         0±0     14 ± 3   16 ± 3       65 ± 5        74 ± 1
+        antmaze-teleport-navigate-v0                  26 ± 3   39 ± 3      35 ± 5   35 ± 5   53 ± 2       36 ± 4        50 ± 2
+        antmaze-medium-stitch-v0                     45 ± 11   44 ± 6      29 ± 6   59 ± 7   53 ± 6       94 ± 1        83 ± 2
+        antmaze-large-stitch-v0                       3±3      18 ± 2       7±2     18 ± 2   11 ± 2       67 ± 5        31 ± 2
+        antmaze-giant-stitch-v0                       0±0       0±0         0±0      0±0      0±0         2±2            0±0
+        antmaze-teleport-stitch-v0                   31 ± 6    39 ± 3      17 ± 2   24 ± 5   31 ± 4       36 ± 2        38 ± 1
+        humanoidmaze-medium-navigate-v0                8±2     24 ± 2      27 ± 2   21 ± 8   60 ± 4       89 ± 2        91 ± 0
+        humanoidmaze-large-navigate-v0                1±0       2±1         2±1     5±1      24 ± 4       49 ± 4        66 ± 1
+        humanoidmaze-giant-navigate-v0                0±0       0±0         0±0     1±0       3±2         12 ± 4        81 ± 1
+        humanoidmaze-medium-stitch-v0                 29 ± 5   12 ± 2      12 ± 3   18 ± 2   36 ± 2       88 ± 2        89 ± 1
+        humanoidmaze-large-stitch-v0                   6±3      1±1         0±0      3±1      4±1         28 ± 3        34 ± 2
+        cube-single-play-v0                            6±2     53 ± 4      68 ± 6    5±1     19 ± 2       15 ± 3        14 ± 2
+        puzzle-3x3-play-v0                            2±0       6±1        95 ± 1    1±0      3±1         12 ± 2        54 ± 3
+        visual-antmaze-medium-navigate-v0            11 ± 2     22 ± 2     11 ± 1   0±0      94 ± 1       93 ± 4        95 ± 1
+        visual-antmaze-large-navigate-v0              4±0        5±1        4±1     0±0      84 ± 1       53 ± 9        85 ± 2
+        visual-antmaze-giant-navigate-v0             0±0        1±1        0±0      0±0      47 ± 2        6±4          61 ± 1
+        visual-antmaze-teleport-navigate-v0           5±1        8±1        6±1     6±3      48 ± 2       37 ± 2        41 ± 1
+        visual-antmaze-teleport-stitch-v0            32 ± 3      1±1        1±0     1±2      32 ± 6       37 ± 4        25 ± 5
+        visual-humanoidmaze-medium-navigate-v0       0±0        0±0        0±0      0±0       1±0          0±0          22 ± 2
+        visual-humanoidmaze-medium-stitch-v0         1±0        0±0        0±0      0±0       1±0          0±0          15 ± 1
+
+
+
+without requiring the explicit representation-learning losses         Table 2. Flat-critic comparison on navigate-v0. Success
+                                                                      rates (%), mean ± std over 4 seeds. CRL (OGBench) reports
+used by prior visual RL methods.                                      original benchmark numbers, CRL (re-eval) and SVL use the
+Why does HSVL perform better on humanoidmaze-giant                    same DDPG+BC actor (depth 6), isolating the critic. HSVL adds
+                                                                      hierarchical extraction on top of SVL. Full results in Tab. 5
+than on humanoidmaze-large? Our HSVL achieves a
+higher success rate on humanoidmaze-giant-navigate (81%)                                          CRL       CRL            SVL     HSVL
+than on the smaller variant, humanoidmaze-large-navigate                                        (OGBench) (re-eval)       (ours)   (ours)
+(66%). These results look counterintuitive, as the giant                 antmaze-medium              95        96 ± 1    96 ± 1     96
+maze requires up to 3000 steps to reach the goal. We conjec-             antmaze-large               83        89 ± 1    91 ± 0     92
+ture that this gap is driven primarily by dataset size rather            antmaze-giant               16        50 ± 2    43 ± 2     74
+                                                                         humanoidmaze-medium         60        62 ± 0    88 ± 3     91
+than by the challenge of long-horizon planning. Although                 humanoidmaze-large          24        42 ± 1    66 ± 2     66
+both datasets contain 1000 episodes, the giant variant in-               humanoidmaze-giant           3         7±0      45 ± 2     81
+cludes 4M transitions, whereas the large one includes 2M
+transitions, yielding substantially more survival tuples after
+relabeling and thus more supervision for hazard learning.             Comparison protocol. We aim at a minimal and controlled
+This interpretation is consistent with the MLE property of            comparison of the critics. Therefore, we re-evaluate CRL
+Lemma 4.2: increasing the number of samples reduces value             with the same DDPG+BC actor as SVL (depth 6), so that
+estimation error at the canonical O(n−1/2 ) statistical rate.         the methods differ only in their critics rather than in actor
+                                                                      implementations from different codebases. We use CRL as
+5.2. Isolating the survival critic                                    the most directly comparable baseline. Like SVL, it is a
+                                                                      non-TD, Monte-Carlo-style method, so contrasting the two
+To address question (iii), we evaluate the contribution of the
+                                                                      critics under a shared actor isolates what the distributional
+survival critic without hierarchical policy extraction. The
+                                                                      survival formulation adds over scalar contrastive regression.
+flat variant of SVL introduced above pairs the survival critic
+with a standard non-hierarchical DDPG+BC actor. This                  Results.     Table 2 reports success rates across six
+requires learning a state-action value Qπ (s, a, g) rather than       navigate-v0 tasks. The flat SVL critic outperforms
+only V π (s, g). The corresponding derivation follows the             the re-evaluated CRL on the harder settings, most visibly on
+same survival identity (Prop. 4.1), see Appendix A.3.                 humanoidmaze-large (66% vs. 42%) and humanoidmaze-
+                                                                      giant (45% vs. 7%), while matching it on the easier ones.
+
+                                                                  8
+                                                                    SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+                         Humanoid Giant             Humanoid Large             AntMaze Giant             AntMaze Large
+
+                    66     76     72      70   54     60     56      56   60    64     65      55   90     91    90      86       based baseline on complex, long-horizon tasks, supporting
+               12
+
+
+
+
+                                                                                                                                  our central hypothesis that by modeling the full time-to-goal
+Critic Depth
+
+
+
+
+                    69     77     73      69   55     60     60      58   62    65     62      60   92     91    90      88
+               9
+
+
+
+
+                    72     79     79      74   54     61     61      60   72    71     67      60   91     92    89      88
+                                                                                                                                  distribution, SVL mitigates the compounding error inherent
+               6
+
+
+
+
+                    80     83     80      77   62     64     67      66   68    74     68      65   92     94    92      91
+               3
+
+
+
+
+                    3       6      9      12   3       6      9      12   3      6      9      12   3      6      9      12
+                                                                                                                                  to Bellman backups. Second, the observed performance
+                           Actor Depth                Actor Depth               Actor Depth               Actor Depth
+                                                                                                                                  improvements with larger dataset sizes, even in the most
+Figure 3. Network depth ablation study. Success rates (%) when                                                                    challenging environments, suggest that the proposed frame-
+varying actor depth and critic depth.                                                                                             work scales favorably in offline settings. Finally, ablation
+                                                                                                                                  studies indicate that HSVL is robust to architectural choices.
+This indicates that the distributional, survival-based critic                                                                     We view this work as a foundational step toward reframing
+alone provides a stronger learning signal than contrastive                                                                        sparse-reward GCRL. Our primary objective was to vali-
+regression in an identical flat setup. Adding hierarchical                                                                        date the core potential of the survival perspective; as such,
+extraction (HSVL) compounds this gain on the giant mazes,                                                                         we instantiated SVL within a standard offline architecture
+while not necessary for medium and large sizes.                                                                                   (HSVL) to isolate the benefits of the estimator itself. Spe-
+                                                                                                                                  cific design choices, such as the network architecture and
+5.3. Architectural ablation studies                                                                                               hierarchy, were not optimized and remain open to refine-
+We address question (iv) by examining the sensitivity of                                                                          ment. A central advantage of the proposed framework is
+HSVL to architectural design choices.                                                                                             that it learns the entire distribution of time-to-goal, rather
+                                                                                                                                  than only its expectation. In the present work, the pol-
+Network depth. Fig. 3 reports performance as we vary the                                                                          icy compresses this rich distributional signal into a scalar
+MLP depth of both actor and hazard networks from 3 to                                                                             value estimate, leaving significant information unexploited.
+12 layers. On AntMaze, performance is remarkably stable                                                                           Leveraging this distribution more directly, for exploration,
+across all configurations, indicating that HSVL is robust to                                                                      risk-sensitive control or uncertainty-aware planning, is a
+network depth in this regime. On the higher-dimensional                                                                           promising direction for future work.
+HumanoidMaze, we observe a benefit from increased capac-
+ity, with success rates peaking at depth 6. Overall, the results                                                                  In this regard, the next step is to formally connect survival-
+suggest that HSVL does not require excessive tuning regard-                                                                       based value estimation with distributional RL (Bellemare
+ing network architecture to achieve strong performance.                                                                           et al., 2017). Unlike traditional distributional RL methods,
+                                                                                                                                  which rely on temporal-difference equations, SVL exploits
+Hazard function architecture. We further investigate the                                                                          the structure of the goal-conditioned setting to avoid boot-
+impact of the discretization scheme used to model the time-                                                                       strapping altogether, positioning it as a structured distri-
+to-goal. We compare the three estimators derived in Sec-                                                                          butional Monte Carlo alternative for sparse GCRL. While
+tion 4.3: the finite-horizon model, the Piecewise-Constant                                                                        this paper focuses on offline policy evaluation, extending
+Hazard (PCH), and the Piecewise-Constant Survival (PCS).                                                                          survival-based learning objectives to online settings is an-
+As shown in Fig. 2, all three variants yield comparable suc-                                                                      other important direction. In such regimes, learned hazard
+cess rates on OGBench (Park et al., 2025a) antmaze and                                                                            functions could inform exploration strategies by reasoning
+humanoidmaze tasks. This robustness implies that the per-                                                                         about uncertainty in time-to-goal predictions, enabling more
+formance gains of HSVL stem from the survival formulation                                                                         principled exploration. Likewise, the survival identity is ex-
+itself rather than a specific approximation method. Conse-                                                                        act for returns determined by the goal-hitting time. Extend-
+quently, we adopt the PCS model for our main results due                                                                          ing SVL to arbitrary dense rewards via a sparse/dense critic
+to its simplicity of implementation and efficiency.                                                                               decomposition is a natural next step. A complementary
+                                                                                                                                  direction, particularly relevant to safety-critical robotics,
+6. Discussion and Conclusion                                                                                                      is to extend SVL to a competing-risks model that distin-
+                                                                                                                                  guishes goal achievement from informative failure termina-
+We introduced SVL, a probabilistic framework that frames                                                                          tions, rather than treating both as ordinary right censoring.
+GCRL as survival analysis. By modeling time-to-goal, we
+derived an identity that expresses the goal-conditioned value                                                                     Overall, treating goal-reaching as a survival event provides
+function as a discounted sum of survival probabilities. This                                                                      a statistically viable alternative to conventional GCRL meth-
+enables direct value estimation via MLE for both success                                                                          ods. By replacing Bellman bootstrapping with likelihood-
+events and right-censored trajectories, thereby avoiding the                                                                      based estimation, SVL offers a robust, scalable path toward
+instability and sample inefficiency often associated with TD                                                                      long-horizon decision-making.
+bootstrapping. By combining SVL with hierarchical actors,
+we proposed HSVL for offline GCRL.
+Our empirical evaluation highlights several findings. First,
+HSVL mostly outperforms the strongest hierarchical TD-
+
+                                                                                                                              9
+                           SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+Impact Statement                                                    Barreto, A., Dabney, W., Munos, R., Hunt, J. J., Schaul, T.,
+                                                                      van Hasselt, H. P., and Silver, D. Successor features for
+This paper presents work whose goal is to advance the field           transfer in reinforcement learning. Advances in neural
+of reinforcement learning. There are many potential societal          information processing systems, 30, 2017.
+consequences of our work, none of which we feel must be
+specifically highlighted here.                                      Bellemare, M. G., Dabney, W., and Munos, R. A dis-
+                                                                      tributional perspective on reinforcement learning. In
+Acknowledgments                                                       Precup, D. and Teh, Y. W. (eds.), Proceedings of
+                                                                      the 34th International Conference on Machine Learn-
+This work has received support from the French govern-                ing, volume 70 of Proceedings of Machine Learn-
+ment, managed by the National Research Agency, under the              ing Research, pp. 449–458. PMLR, 06–11 Aug 2017.
+France 2030 program with the references Organic Robotics              URL https://proceedings.mlr.press/v70/
+Program (PEPR O2R) and “PR[AI]RIE-PSAI” (ANR-23-                      bellemare17a.html.
+IACL-0008). This research was funded, in part, by l’Agence
+Nationale de la Recherche (ANR), projects NIMBLE project            Blier, L., Tallec, C., and Ollivier, Y. Learning successor
+(ANR-22-CE33-0008) and PEPR O2R - AS2 (ANR-22-                        states and goal-dependent values: A mathematical view-
+EXOD-0006). The European Union also supported this                    point. arXiv preprint arXiv:2101.07123, 2021.
+work through the ARTIFACT project (GA no. 101165695)
+                                                                    Campanella, G., Häggström, I., Kook, L., Hothorn, T., and
+and the AGIMUS project (GA no. 101070165). The Paris
+                                                                      Fuchs, T. J. A flexible deep learning framework for
+Île-de-France Région also supported this work in the frame
+                                                                      survival analysis with medical data. In International
+of the DIM AI4IDF. The authors gratefully acknowledge
+                                                                      Conference on Medical Image Computing and Computer-
+the support and resources provided by the CLEPS infras-
+                                                                      Assisted Intervention, pp. 3–13. Springer, 2025.
+tructure at Inria Paris. This work was performed using HPC
+resources from the GENCI-IDRIS Jean-Zay cluster (Grant              Charlesworth, H. and Montana, G. Plangan: Model-based
+2024-AD010616763). Views and opinions expressed are                   planning with sparse rewards and multiple goals. Ad-
+those of the author(s) only and do not necessarily reflect            vances in Neural Information Processing Systems, 33:
+those of the funding agencies.                                        8532–8542, 2020.
+
+References                                                          Cox, D. R. Regression models and life-tables. Journal of
+                                                                      the Royal Statistical Society: Series B (Methodological),
+Ahn, H., Choi, H., Han, J., and Moon, T. Option-aware                 34(2):187–202, 1972.
+  temporally abstracted value for offline goal-conditioned
+  reinforcement learning. In The Thirty-ninth Annual                Cramér, H. Mathematical methods of statistics, volume 9.
+ Conference on Neural Information Processing Systems,                 Princeton university press, 1999.
+  2025. URL https://openreview.net/forum?
+  id=gfXBNBKx02.                                                    Ding, Y., Florensa, C., Abbeel, P., and Phielipp, M. Goal-
+                                                                      conditioned imitation learning. Advances in neural infor-
+Andersen, P. K., Borgan, O., Gill, R. D., and Keiding, N.             mation processing systems, 32, 2019.
+ Statistical models based on counting processes. Springer
+                                                                    Dosovitskiy, A. and Koltun, V. Learning to act by predicting
+  Science & Business Media, 2012.
+                                                                      the future. In 5th International Conference on Learning
+                                                                      Representations, ICLR 2017, Toulon, France, April 24-26,
+Andrychowicz, M., Wolski, F., Ray, A., Schneider, J., Fong,
+                                                                      2017, Conference Track Proceedings. OpenReview.net,
+  R., Welinder, P., McGrew, B., Tobin, J., Abbeel, P., and
+                                                                      2017. URL https://openreview.net/forum?
+  Zaremba, W. Hindsight experience replay. Advances in
+                                                                      id=rJLS7qKel.
+  neural information processing systems, 30, 2017.
+                                                                    Efron, B. The efficiency of cox’s likelihood function for
+Baek, S., Park, T., Park, J., Oh, S., and Kim, Y. Graph-              censored data. Journal of the American statistical Associ-
+  assisted stitching for offline hierarchical reinforcement           ation, 72(359):557–565, 1977.
+  learning. In Singh, A., Fazel, M., Hsu, D., Lacoste-Julien,
+  S., Berkenkamp, F., Maharaj, T., Wagstaff, K., and Zhu, J.        Emmons, S., Eysenbach, B., Kostrikov, I., and Levine, S.
+  (eds.), Proceedings of the 42nd International Conference           Rvs: What is essential for offline RL via supervised
+  on Machine Learning, volume 267 of Proceedings of                  learning? In The Tenth International Conference on
+  Machine Learning Research, pp. 2391–2408. PMLR, 13–                Learning Representations, ICLR 2022, Virtual Event,
+  19 Jul 2025. URL https://proceedings.mlr.                          April 25-29, 2022. OpenReview.net, 2022. URL https:
+  press/v267/baek25a.html.                                           //openreview.net/forum?id=S874XAIpkR-.
+
+                                                               10
+                            SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+Eysenbach, B., Salakhutdinov, R. R., and Levine, S. Search              2020, Addis Ababa, Ethiopia, April 26-30, 2020. OpenRe-
+  on the replay buffer: Bridging planning and reinforce-                view.net, 2020. URL https://openreview.net/
+  ment learning. In Wallach, H., Larochelle, H., Beygelz-               forum?id=BJeAHkrYDS.
+  imer, A., d'Alché-Buc, F., Fox, E., and Garnett, R. (eds.),
+  Advances in Neural Information Processing Systems, vol-             Harrington, D. P. and Fleming, T. R. A class of rank test
+  ume 32. Curran Associates, Inc., 2019.                                procedures for censored survival data. Biometrika, 69(3):
+                                                                        553–566, 1982.
+Eysenbach, B., Salakhutdinov, R., and Levine, S. C-
+  learning: Learning to achieve goals via recursive clas-             Hejna, J., Gao, J., and Sadigh, D. Distance weighted su-
+  sification. In 9th International Conference on Learn-                 pervised learning for offline interaction data. In Inter-
+  ing Representations, ICLR 2021, Virtual Event, Austria,               national Conference on Machine Learning, pp. 12882–
+  May 3-7, 2021. OpenReview.net, 2021. URL https:                      12906. PMLR, 2023.
+  //openreview.net/forum?id=tc5qisoB-C.
+                                                                      Jang, E., Irpan, A., Khansari, M., Kappler, D., Ebert, F.,
+Eysenbach, B., Zhang, T., Levine, S., and Salakhutdinov,                Lynch, C., Levine, S., and Finn, C. Bc-z: Zero-shot
+  R. R. Contrastive learning as goal-conditioned reinforce-             task generalization with robotic imitation learning. In
+  ment learning. Advances in Neural Information Process-                Conference on Robot Learning, pp. 991–1002. PMLR,
+  ing Systems, 35:35603–35620, 2022.                                    2022.
+
+Fang, M., Zhou, T., Du, Y., Han, L., and Zhang, Z.                    Kalbfleisch, J. D. and Prentice, R. L. The statistical analysis
+  Curriculum-guided hindsight experience replay. Ad-                    of failure time data. John Wiley & Sons, 2002.
+  vances in neural information processing systems, 32,
+  2019.                                                               Kaplan, E. L. and Meier, P. Nonparametric estimation from
+                                                                        incomplete observations. Journal of the American statis-
+Fedus, W., Gelada, C., Bengio, Y., Bellemare, M. G., and                tical association, 53(282):457–481, 1958.
+  Larochelle, H. Hyperbolic discounting and learning
+  over multiple horizons, 2019. URL https://arxiv.                    Katzman, J. L., Shaham, U., Cloninger, A., Bates, J., Jiang,
+  org/abs/1902.06865.                                                   T., and Kluger, Y. Deepsurv: personalized treatment rec-
+                                                                        ommender system using a cox proportional hazards deep
+Fisher, R. A. Theory of statistical estimation. In Mathemat-            neural network. BMC medical research methodology, 18
+  ical proceedings of the Cambridge philosophical society,              (1):24, 2018.
+  volume 22, pp. 700–725. Cambridge University Press,
+  1925.                                                               Ke, K., Lin, Q., Liu, Z., He, S., and Yu, C. Conservative
+                                                                        offline goal-conditioned implicit v-learning. In Forty-
+Fleming, T. R. and Harrington, D. P. Counting processes                 second International Conference on Machine Learning,
+  and survival analysis. John Wiley & Sons, 2013.                       2025. URL https://openreview.net/forum?
+                                                                        id=5ryn8tYWHL.
+Fotso, S. Deep neural networks for survival analy-
+  sis based on a multi-task framework. arXiv preprint                 Kostrikov, I., Nair, A., and Levine, S. Offline reinforcement
+  arXiv:1801.05512, 2018.                                               learning with implicit q-learning. In The Tenth Interna-
+                                                                        tional Conference on Learning Representations, ICLR
+Gensheimer, M. F. and Narasimhan, B. A scalable discrete-               2022, Virtual Event, April 25-29, 2022. OpenReview.net,
+  time survival model for neural networks. PeerJ, 7:e6257,              2022. URL https://openreview.net/forum?
+  2019.                                                                 id=68n2s9ZJWF8.
+Ghosh, D., Gupta, A., Reddy, A., Fu, J., Devin, C. M.,                Kvamme, H., Borgan, Ø., and Scheel, I. Time-to-event pre-
+  Eysenbach, B., and Levine, S. Learning to reach goals                 diction with neural networks and cox regression. J. Mach.
+ via iterated supervised learning. In 9th International                 Learn. Res., 20:129:1–129:30, 2019. URL https:
+ Conference on Learning Representations, ICLR 2021,                    //jmlr.org/papers/v20/18-424.html.
+ Virtual Event, Austria, May 3-7, 2021. OpenReview.net,
+  2021. URL https://openreview.net/forum?                             Lee, C., Zame, W., Yoon, J., and Van Der Schaar, M. Deep-
+  id=rALA0Xo6yNJ.                                                       hit: A deep learning approach to survival analysis with
+                                                                        competing risks. In Proceedings of the AAAI conference
+Hansen, S., Dabney, W., Barreto, A., Warde-Farley, D.,                  on artificial intelligence, volume 32, 2018.
+  de Wiele, T. V., and Mnih, V. Fast task inference with
+  variational intrinsic successor features. In 8th Interna-           Lee, E. T. and Wang, J. W. Statistical methods for survival
+  tional Conference on Learning Representations, ICLR                   data analysis, volume 476. John Wiley & Sons, 2003.
+
+                                                                 11
+                           SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+Lee, H., Shin, H., Nam, G., and Lee, H. Dual mixture-               Park, S., Frans, K., Eysenbach, B., and Levine, S. Ogbench:
+  of-experts framework for discrete-time survival analysis.           Benchmarking offline goal-conditioned RL. In The Thir-
+  arXiv preprint arXiv:2510.26014, 2025.                              teenth International Conference on Learning Representa-
+                                                                      tions, ICLR 2025, Singapore, April 24-28, 2025. OpenRe-
+Lin, X., Baweja, H. S., and Held, D. Reinforcement                    view.net, 2025a. URL https://openreview.net/
+  learning without ground-truth state. arXiv preprint                 forum?id=M992mjgKzI.
+  arXiv:1905.07866, 2019.
+                                                                    Park, S., Frans, K., Mann, D., Eysenbach, B., Kumar, A.,
+Liu, H. and Abbeel, P. Aps: Active pretraining with suc-              and Levine, S. Horizon reduction makes RL scalable.
+  cessor features. In International Conference on Machine             In The Thirty-ninth Annual Conference on Neural In-
+  Learning, pp. 6736–6747. PMLR, 2021.                                formation Processing Systems, 2025b. URL https:
+Liu, M., Zhu, M., and Zhang, W. Goal-conditioned re-                  //openreview.net/forum?id=hguaupzLCU.
+  inforcement learning: Problems and solutions. arXiv               Peng, X. B., Kumar, A., Zhang, G., and Levine, S.
+  preprint arXiv:2201.08299, 2022.                                    Advantage-weighted regression: Simple and scalable
+Lynch, C., Khansari, M., Xiao, T., Kumar, V., Tompson, J.,            off-policy reinforcement learning, 2019. URL https:
+  Levine, S., and Sermanet, P. Learning latent plans from             //arxiv.org/abs/1910.00177.
+  play. In Conference on robot learning, pp. 1113–1132.             Peto, R. and Peto, J. Asymptotically efficient rank invariant
+  Pmlr, 2020.                                                         test procedures. Journal of the Royal Statistical Society:
+Ma, Y. J., Yan, J., Jayaraman, D., and Bastani, O. Offline            Series A (General), 135(2):185–198, 1972.
+ goal-conditioned reinforcement learning via f-advantage            Ranganath, R., Perotte, A., Elhadad, N., and Blei, D. Deep
+ regression. In Proceedings of the 36th International Con-            survival analysis. In Machine Learning for Healthcare
+ ference on Neural Information Processing Systems, NIPS               Conference, pp. 101–114. PMLR, 2016.
+ ’22, Red Hook, NY, USA, 2022. Curran Associates Inc.
+ ISBN 9781713871088.                                                Ren, Z., Dong, K., Zhou, Y., Liu, Q., and Peng, J. Explo-
+                                                                      ration via hindsight goal generation. Advances in Neural
+Mantel, N. et al. Evaluation of survival data and two new             Information Processing Systems, 32, 2019.
+ rank order statistics arising in its consideration. Cancer
+ Chemother Rep, 50(3):163–170, 1966.                                Riedmiller, M., Hafner, R., Lampe, T., Neunert, M., De-
+                                                                      grave, J., Wiele, T., Mnih, V., Heess, N., and Springen-
+Mazoure, B., Eysenbach, B., Nachum, O., and Tompson, J.               berg, J. T. Learning by playing solving sparse reward
+ Contrastive value learning: Implicit models for simple               tasks from scratch. In International conference on ma-
+ offline rl. In Conference on Robot Learning, pp. 1257–               chine learning, pp. 4344–4353. PMLR, 2018.
+ 1267. PMLR, 2023.
+                                                                    Savinov, N., Dosovitskiy, A., and Koltun, V. Semi-
+Mendonca, R., Rybkin, O., Daniilidis, K., Hafner, D., and             parametric topological memory for navigation. In 6th
+ Pathak, D. Discovering and achieving goals via world                 International Conference on Learning Representations,
+ models. Advances in Neural Information Processing                    ICLR 2018, Vancouver, BC, Canada, April 30 - May 3,
+ Systems, 34:24379–24391, 2021.                                       2018, Conference Track Proceedings. OpenReview.net,
+Nagpal, C., Li, X., and Dubrawski, A. Deep survival ma-               2018. URL https://openreview.net/forum?
+  chines: Fully parametric survival regression and repre-             id=SygwwGbRW.
+  sentation learning for censored data with competing risks.        Schaul, T., Horgan, D., Gregor, K., and Silver, D. Uni-
+  IEEE Journal of Biomedical and Health Informatics, 25               versal value function approximators. In Bach, F.
+  (8):3163–3175, 2021.                                                and Blei, D. (eds.), Proceedings of the 32nd Interna-
+Nelson, W. Hazard plotting for incomplete failure data.               tional Conference on Machine Learning, volume 37
+ Journal of Quality Technology, 1(1):27–52, 1969.                     of Proceedings of Machine Learning Research, pp.
+                                                                      1312–1320, Lille, France, 07–09 Jul 2015. PMLR.
+Nelson, W. Theory and applications of hazard plotting for             URL https://proceedings.mlr.press/v37/
+  censored failure data. Technometrics, 14(4):945–966,                schaul15.html.
+ 1972.
+                                                                    Schmeckpeper, K., Xie, A., Rybkin, O., Tian, S., Dani-
+Park, S., Ghosh, D., Eysenbach, B., and Levine, S. Hiql:              ilidis, K., Levine, S., and Finn, C. Learning predictive
+  Offline goal-conditioned rl with latent states as actions.          models from observation and interaction. In European
+  Advances in Neural Information Processing Systems, 36:              Conference on Computer Vision, pp. 708–725. Springer,
+  34866–34891, 2023.                                                  2020.
+
+                                                               12
+                           SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+Schultheis, M., Rothkopf, C. A., and Koeppl, H. Rein-               Zhu, M., Liu, M., Shen, J., Zhang, Z., Chen, S., Zhang,
+  forcement learning with non-exponential discounting. In             W., Ye, D., Yu, Y., Fu, Q., and Yang, W. Mapgo: Model-
+  Proceedings of the 36th International Conference on                 assisted policy optimization for goal-oriented tasks. arXiv
+  Neural Information Processing Systems, NIPS ’22, Red                preprint arXiv:2105.06350, 2021.
+  Hook, NY, USA, 2022. Curran Associates Inc. ISBN
+  9781713871088.
+
+Sikchi, H., Chitnis, R., Touati, A., Geramifard, A., Zhang,
+  A., and Niekum, S. Smore: Score models for offline
+  goal-conditioned reinforcement learning. arXiv preprint
+  arXiv:2311.02013, 2023.
+
+Singer, J. D. and Willett, J. B. Applied longitudinal data
+  analysis: Modeling change and event occurrence. Oxford
+  university press, 2003.
+
+Tiofack, F. N., Hellard, T. L., Schramm, F., Perrin-Gilbert,
+  N., and Carpentier, J. Guided flow policy: Learning
+  from high-value actions in offline reinforcement learning.
+  arXiv preprint arXiv:2512.03973, 2025.
+
+Tutz, G., Schmid, M., et al. Modeling discrete time-to-event
+  data, volume 3. Springer, 2016.
+
+Wald, A. Note on the consistency of the maximum likeli-
+ hood estimate. The Annals of Mathematical Statistics, 20
+ (4):595–601, 1949.
+
+Wang, K., Javali, I., Bortkiewicz, M., Trzcinski, T., and
+ Eysenbach, B. 1000 layer networks for self-supervised
+ RL: Scaling depth can enable new goal-reaching capabil-
+ ities. In The Thirty-ninth Annual Conference on Neural
+ Information Processing Systems, 2025. URL https:
+ //openreview.net/forum?id=s0JVsx3bx1.
+
+Wang, P., Li, Y., and Reddy, C. K. Machine learning for
+ survival analysis: A survey. ACM Computing Surveys
+ (CSUR), 51(6):1–36, 2019.
+
+Wang, T., Torralba, A., Isola, P., and Zhang, A. Opti-
+ mal goal-reaching reinforcement learning via quasimetric
+ learning. In International Conference on Machine Learn-
+ ing, pp. 36411–36430. PMLR, 2023.
+
+Yang, R., Lu, Y., Li, W., Sun, H., Fang, M., Du, Y., Li,
+  X., Han, L., and Zhang, C. Rethinking goal-conditioned
+  supervised learning and its connection to offline RL. In
+  The Tenth International Conference on Learning Repre-
+  sentations, ICLR 2022, Virtual Event, April 25-29, 2022.
+  OpenReview.net, 2022. URL https://openreview.
+  net/forum?id=KJztlfGPdwW.
+
+Zhao, R. and Tresp, V. Energy-based hindsight experience
+  prioritization. In Conference on Robot Learning, pp. 113–
+  122. PMLR, 2018.
+
+                                                               13
+                                 SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+A. Appendix                                                                                                       Heads
+
+
+                                                                                                               Immediate
+                                                                                                                  hit                                                  ℓ0 ∈ R
+                                                                                             Shared features
+A.1. Link between survival and hazard functions                                    Input                         ℓ0 (z)
+                                                                                                                                                                       Hazard logits
+                                                                                                 MLP
+                                                                                State-goal                     Coeff. head
+                                                                                                 z =                         c ∈ RK      Basis library
+                                                                                  (s, g)                       c(z) ∈ RK                                                ℓt
+The recursive formula expressing S using h, Eq. 7, is proved                                    ϕ(s, g)                                       Ψ
+                                                                                                                                          S×H×K
+                                                                                                                                                             ⊗
+                                                                                                                Selector
+below for completeness. As T π (s, g) is a discrete random                                                       head
+                                                                                                               w(z) ∈ RS
+                                                                                                                             w ∈ RS
+                                                                                                                                                                        ℓ1:H ∈ RH
+                                                                                                                                                                                 t
+
+
+
+
+variable:                                                                                                                                                    ⊤
+                                                                                                                                                         w(z) Ψ c(z)
+
+
+
+
+   S π (t | s, g) = Pr(T π (s, g) > t)                             (20)        Figure 4. Hazard function architecture. From a given tuple of
+                = Pr(T π (s, g) ≥ t + 1)                           (21)        state s and goal g, the network predicts time-to-goal behavior by
+                                                                               combining a shared encoder with three heads: an immediate-hit
+                = Pr(T π (s, g) = t + 1)                           (22)        predictor, coefficients describing temporal evolution, and weights
+                                  π
+                       + Pr(T (s, g) > t + 1)                                  that select among learned basis patterns. These components are
+                                                                               combined to produce hazard predictions over time.
+                = h (t + 1 | s, g) Pr(T π (s, g) ≥ t + 1)
+                    π
+
+                       + Pr(T π (s, g) > t + 1)                    (23)
+                    π                       π
+                = h (t + 1 | s, g)S (t | s, g)                                 The associated survival function is
+                       + S π (t + 1 | s, g)                        (24)                       S π (t|s, a, g) = Pr T π (s, a, g) > t .
+                                                                                                                                    
+                                                                                                                                                                                (32)
+
+Equality 23 is the Bayesian rule applied to {T π (s, g) =
+                                                                               Under the same sparse-reward setting as Proposition 4.1,
+t + 1} = {T π (s, g) = t + 1} ∩ {T π (s, g) ≥ t + 1}.
+                                                                               the goal-conditioned state-action value function satisfies
+A.2. Proof of Proposition 4.1                                                                                                ∞
+                                                                                                                             X
+                                                                                             Qπ (s, a, g) = −                         γ t S π (t | s, a, g).                    (33)
+Consider the GCRL setting where the agent re-                                                                                t=0
+ceives a per-step penalty until success, r(st , at , g) =
+−1{∥ϕ(st+1 )−g∥≥ϵ} , and the episode terminates upon goal                   Proof. The proof follows identically to that of Proposi-
+achievement.                                                                tion 4.1 (Appendix A.2), replacing T π (s, g) with T π (s, a, g)
+                           "∞                            #
+                            X                                               throughout. The only difference is that the first action
+ V π (s, g) = Eτ ∼ρπ (·|g)    γ t r(st , at , g) | s0 = s (25)              a0 = a is fixed rather than drawn from π(·|s0 , g), which
+                                t=0
+                                "∞                                        # does not affect the derivation.
+                                  X
+           = −Eτ ∼ρπ (·|g)              γ t 1{∥ϕ(st+1 )−g∥≥ϵ} | s0 = s
+                                                                               A.4. Explanation hazard architecture
+                                  t=0
+                                                                   (26)        There is a growing interest in the survival analysis commu-
+                                                                               nity regarding the optimal deep neural architecture for mod-
+                                               
+                                T π (s,g)−1
+                                   X
+           = −ET π (s,g)                     γt                  (27)        eling hazard functions. The emerging consensus suggests
+                                   t=0                                         that independently predicting logits for each time bin is sub-
+                            "   ∞
+                                                         #                     optimal, as it fails to exploit temporal correlations. Conse-
+                                                                               quently, the primary design objective of modern approaches
+                                X
+                                        t
+           = −ET π (s,g)              γ 1{T π (s,g)>t}             (28)
+                                t=0                                            is to encode temporal information while maintaining compu-
+                 ∞
+                 X                                                             tational efficiency (Lee et al., 2025; Campanella et al., 2025).
+                       γ t ET π (s,g) 1{T π (s,g)>t}
+                                                    
+           =−                                                      (29)        For instance, the Dual Mixture-of-Experts framework (Lee
+                 t=0                                                           et al., 2025) extracts features and combines them with learn-
+                 X∞                                                            able time embeddings through multiple heads. However,
+           =−          γ t Pr(T π (s, g) > t)                      (30)        this approach may not scale, as maintaining separate heads
+                 t=0                                                           for each time bin significantly increases the computational
+Equality 27 comes from the definition of T π (s, g).                           cost. Conversely, frameworks using static polynomial bases
+                                                                               (e.g., Bernstein polynomials) (Campanella et al., 2025) offer
+A.3. State-action survival identity (Q-function)                               a more computationally efficient alternative but impose a
+                                                                               global, rigid inductive bias, assuming the underlying tempo-
+We extend the survival identity of Proposition 4.1 to the                      ral structure is invariant across different inputs.
+state-action value function. Define the first hitting time
+conditioned on an initial action a0 = a as                                     Our proposed architecture bridges these two paradigms by
+                n                                     s0 =s, a0 =a,  o         using Conditioned Low-Rank Factorization. To help under-
+T π (s, a, g) = inf t ≥ 0 : ∥ϕ(st+1 )−g∥ < ϵ          at ∼π(·|st ,g)  .        stand our design, we first consider a simplified version with
+                                                    st+1 ∼P(·|st ,at )
+                                                                   (31)        a single learnable basis set. For a given state-goal pair (s, g),
+
+                                                                          14
+                                 SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+we let z = fθ (s, g) be the latent encoding. The hazard logit                 Value evaluation admits a closed form for the prefix and
+at time bin t is expressed as:                                                a hazard-based tail. Let qθ̂ (s, g) := Prθ̂ (T π (s, g) = 0)
+                                                                              denote the predicted probability of immediate success, so
+                ℓ(t, s, g) = c(z)⊤ ψ(t) + bt ,                   (34)         that Sθ̂π (b0 | s, g) = 1 − qθ̂ (s, g), and Sθ̂π (bk+1 | s, g) =
+                                                                              Sθ̂π (bk | s, g)(1 − h̄πθ̂ (k | s, g))Lk . Then
+where c(z) ∈ RK is a vector of predicted coefficients and
+ψ(t) ∈ RK is a learned temporal embedding (a basis func-                                               K−1
+tion) for bin t. In that way, as in (Campanella et al., 2025),
+                                                                                                       X
+                                                                                 Vθ̂π,PCH (s, g) = −          ∆θ,k (γ)Sθ̂π (bk | s, g)
+the hazard function (its logits) is a linear combination of a                                           k=0                                              (37)
+feature and a time embedding basis, but the time embedding
+                                                                                                          γH
+is learnable as in the Dual Mixture-of-Experts.                                                 −                      S π (H | s, g)
+                                                                                                     1 − γ(1 − hK ) θ̂
+However, a single basis set (ψ) forces all (s, g) pairs to                                                            Lk
+share the same underlying temporal subspace, limiting the                                                    π
+                                                                                                 bk 1− γ(1−h̄θ (k|s,g) 
+                                                                              where ∆θ,k (γ) = γ                           ,
+model’s ability to represent fundamentally different survival                                                 π
+                                                                                                       1−γ 1−h̄θ (k|s,g)
+behaviors (e.g., immediate success vs. long-term survival).                          π
+                                                                              hK = h̄θ̂ (K | s, g) and the tail uses
+To resolve this, we extend the formulation to include a Basis                 P∞        t         H
+                                                                                t=H γ S(t) ≈ γ S(H)/(1 − γ(1 −                     hK )).
+Library Ψ ∈ RS×H×K containing S distinct basis sets.
+The model dynamically selects and mixes these sets using                      Piecewise-constant survival per bin (PCS). We also con-
+selection weights w(z) ∈ RS :                                                 sider the standard grouped-time model (Tutz et al., 2016)
+                        S                                                     where the event time is observed at the bin level. Define the
+                                                                              interval hazard
+                        X
+                              wj (z) c(z)⊤ ψ j (t) + bt .
+                                                  
+         ℓ(t, s, g) =                                            (35)
+                        j=1
+                                                                               h̃πθ (k | s, g) = Pr T π (s, g) ∈ [bk , bk+1 ) T π (s, g) ≥ bk .
+                                                                                                                                             
+
+By implementing this as a double tensor contraction-                          Survival at bin boundaries satisfies
+w(z)⊤ Ψc(z)-we allow the model to dynamically ”assem-
+                                                                                  Sθπ (bk+1 | s, g) = Sθπ (bk | s, g) 1 − h̃πθ (k | s, g)
+                                                                                                                                                     
+ble” a custom temporal basis for every (s, g) pair. This
+allows for better expressivity (capturing diverse ”styles” of
+hazard functions) while maintaining the computational bene-                   If an episode produces an event time τ ≤ H, we observe a
+fits of a single-head architecture, as the library Ψ is a shared,             binned event [bkτ , bkτ +1 ). If it is right-censored at c ≤ H,
+learned parameters across the entire dataset.                                 we only observe survival up to the last completed boundary
+                                                                              bk(c) . The grouped-time negative log-likelihood is
+A.5. Details on binned time modeling
+                                                                                 LPCS (θ) = −E(s,g,τ,c,δ) [δ ℓτ (θ) + (1 − δ) ℓc (θ)]                    (38)
+Piecewise-constant per-step hazard (PCH) Let’s as-
+sume the hazard function is constant within each bin:                         With
+                                                                                                                         X
+                                                                                             π
+        hπθ (t | s, g) = h̄πθ (k | s, g)                                      ℓPCS                                                log 1 − h̃πθ (j | s, g)
+                                                                                                                                                         
+                                            t ∈ [bk , bk+1 ).                  τ (θ) = log h̃θ (k(τ ) | s, g) +
+                                                                                                                        j<k(τ )
+For an observation (s, g, τ, c, δ), we can write τ = bkτ +mτ                                X
+                                                                              ℓPCS                            h̃πθ (j | s, g)
+                                                                                                                             
+and c = bkc + mc , where kτ = max{k : bk ≤ τ }, kc =                           c (θ)   =            log 1 −
+                                                                                           j<k(c)
+max{k : bk ≤ c}, mτ ∈ {0, . . . , Lkτ − 1} and mc ∈
+{0, . . . , Lkc }. The grouped-time negative log-likelihood is
+                                                                              As the survival function is constant within each bin, Sθ (t |
+   LPCH (θ) = −E(s,g,τ,c,δ) [δ ℓτ (θ) + (1 − δ) ℓc (θ)]          (36)         s, g) ≈ Sθ (bk | s, g) for t ∈ [bk , bk+1 ). Hence,
+
+With                                                                                                   K−1                                       
+                                                                                                       X                        γ bk 1 − γ Lk
+                                                                                Vθ̂π,PCS (s, g)   =−         Sθ̂π (bk   | s, g)
+ℓPCH           π
+                                    X
+                                           Lj log 1 − h̄πθ (j | s, g)
+                                                                                                                                    1−γ
+ τ (θ) = log h̄θ (kτ | s, g) +                                                                         k=0                       (39)
+                                    j<kτ                                                            γH
+                                                                                                 −       S π (H | s, g),
+                                 + mτ log 1 − h̄πθ (kτ | s, g)
+                                                              
+                                                                                                   1 − γ θ̂
+                                                                                                 P∞
+                                                                              where the tail uses t=H γ t S(t) ≈ γ H S(H)/(1 − γ).
+                        X
+          ℓPCH                 Lj log 1 − h̄πθ (j | s, g)
+                                                         
+           c   (θ) =
+                        j<kc
+
+                        + mc log 1 − h̄πθ (kc | s, g) .
+                                                     
+
+
+                                                                         15
+                              SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+
+
+
+       Table 3. Hyperparameters. Parameters not specific to the method are taken directly from OGBench (Park et al., 2025a).
+
+ Hyperparameter                            Value
+ Learning rate                             3e-4
+ Optimizer                                 Adam
+ Minibatch size                            1024 (Maze), 256 (Visual env)
+ Total gradient steps                      1000000 (Maze), 500000 (Visual env)
+ MLP width                                 512
+ Critic depth                              3
+ Actor depth                               6
+ Activation function                       GELU
+ Discount factor γ                         0.995 (default), 0.999 (HumanoidMaze-giant), 0.99(maze-medium, manipulations)
+ Image augmentation probability            0.5 (random crop)
+ Subgoal representation dimension          256
+ Inverse temperature β                     3
+ Policy (pD       D       D
+           cur , ptraj , prand ) ratio     (0,1,0) (default), (0,0.5, 0.5) (stitch)
+ Number bin K                              500
+ Last interval edges bK                    10000
+ subgoal step k                            100 (humanoidmaze), 25(other)
+ Value (pD       D       D
+          cur , ptraj , prand ) ratio      (0.08, 0.6, 0.32)
+
+
+
+
+Table 4. Full results, hazard discretization comparison. Success rates (%), mean ± std over 4 seeds, underlying Figure 2. We compare
+the three estimators from Section 4.3: finite-horizon (no bins), piecewise-constant per-step hazard (PCH), and piecewise-constant survival
+per bin (PCS).
+
+                                  Environment                              no bins     PCH       PCS
+                                  antmaze-medium-navigate-v0               96 ± 0     96 ± 1    96 ± 1
+                                  antmaze-large-navigate-v0                93 ± 1     93 ± 1    92 ± 1
+                                  antmaze-giant-navigate-v0                71 ± 2     71 ± 2    74 ± 1
+                                  humanoidmaze-medium-navigate-v0          92 ± 1     93 ± 1    91 ± 0
+                                  humanoidmaze-large-navigate-v0           65 ± 3     67 ± 2    66 ± 1
+                                  humanoidmaze-giant-navigate-v0           83 ± 2     80 ± 3    81 ± 1
+
+
+
+
+                                                                   16
+                             SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+
+
+
+Table 5. Full results for flat-critic comparison. Per-task success rates (%), mean ± std over 4 seeds, on the six navigate-v0 tasks
+from Table 2. CRL reports the original benchmark numbers (Park et al., 2025a) for reference. CRL (re-eval) and SVL share the same
+DDPG+BC actor (depth 6), so their comparison isolates the critic. Bold values indicate the best performance in each row.
+
+                                                                              CRL               CRL         SVL
+                    Environment                            Task
+                                                                       (Park et al., 2025a)   (re-eval)    (ours)
+                                                           task1             97 ± 1           97 ± 1      96 ± 1
+                                                           task2             95 ± 2           97 ± 1      95 ± 0
+                                                           task3             92 ± 3           96 ± 1      96 ± 1
+                    antmaze-medium-navigate-v0
+                                                           task4             94 ± 5           96 ± 1      96 ± 1
+                                                           task5             96 ± 2           95 ± 1      94 ± 2
+                                                           overall           95 ± 1           96 ± 1      96 ± 1
+                                                           task1             91 ± 3           90 ± 1      93 ± 1
+                                                           task2            62 ± 14           83 ± 2      90 ± 1
+                                                           task3             91 ± 2           95 ± 0      89 ± 3
+                    antmaze-large-navigate-v0
+                                                           task4            85 ± 11           90 ± 2      92 ± 2
+                                                           task5             85 ± 3           88 ± 2      94 ± 1
+                                                           overall           83 ± 4           89 ± 1      91 ± 0
+                                                           task1             2±2              16 ± 8      18 ± 4
+                                                           task2            21 ± 10           62 ± 5      46 ± 5
+                                                           task3             5±5              27 ± 6      26 ± 7
+                    antmaze-giant-navigate-v0
+                                                           task4             35 ± 9           65 ± 4      57 ± 4
+                                                           task5            16 ± 10           78 ± 1      66 ± 7
+                                                           overall           16 ± 3           50 ± 2      43 ± 2
+                                                           task1             84 ± 3           88 ± 1       88 ± 4
+                                                           task2             80 ± 5           93 ± 2       96 ± 1
+                                                           task3            43 ± 11           40 ± 1       92 ± 5
+                    humanoidmaze-medium-navigate-v0
+                                                           task4             5±5               0±1        69 ± 16
+                                                           task5             87 ± 7           91 ± 1       97 ± 0
+                                                           overall           60 ± 4           62 ± 0       88 ± 3
+                                                           task1            36 ± 11           64 ± 5      74 ± 3
+                                                           task2             0±0               0±0        22 ± 7
+                                                           task3            54 ± 17           62 ± 3      83 ± 6
+                    humanoidmaze-large-navigate-v0
+                                                           task4            23 ± 11           54 ± 1      85 ± 4
+                                                           task5             6±4              28 ± 2      64 ± 7
+                                                           overall           24 ± 4           42 ± 1      66 ± 2
+                                                           task1              1±1              1±0        25 ± 8
+                                                           task2              9±5             20 ± 2      46 ± 4
+                                                           task3              2±2              1±0        45 ± 4
+                    humanoidmaze-giant-navigate-v0
+                                                           task4              3±2              8±1        45 ± 1
+                                                           task5              1±1              3±1        63 ± 6
+                                                           overall            3±2              7±0        45 ± 2
+
+
+
+
+                                                                  17
+                              SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+
+
+
+Table 6. Full results, part 1. The success rate is averaged over 4 random seeds. Bold values indicate the best performance in each row.
+Baseline performances are the official results provided by OGBench (Park et al., 2025a).
+
+           Environment                     Task      GCBC      GCIVL     GCIQL       QRL       CRL       HIQL      HSVL
+                                      task1    35 ± 9 81 ± 10 63 ± 9                93 ± 2    97 ± 1    94 ± 2     96 ± 1
+                                      task2    21 ± 7 85 ± 5 78 ± 8                 90 ± 5    95 ± 2    97 ± 1     98 ± 1
+                                      task3    24 ± 6 60 ± 13 71 ± 8                86 ± 6    92 ± 3    96 ± 2     97 ± 1
+           antmaze-medium-navigate-v0
+                                      task4    28 ± 7 42 ± 25 59 ± 12               83 ± 4    94 ± 5    96 ± 2     95 ± 2
+                                      task5   37 ± 10 92 ± 3 85 ± 7                 88 ± 8    96 ± 2    96 ± 2     96 ± 1
+                                      overall 29 ± 4 72 ± 8 71 ± 4                  88 ± 3    95 ± 1    96 ± 1     96 ± 1
+                                           task1      6±3      16 ± 12   21 ± 6    71 ± 15 91 ± 3       93 ± 3     92 ± 2
+                                           task2     16 ± 4     5±6      25 ± 7    77 ± 7 62 ± 14       78 ± 9     87 ± 3
+                                           task3     65 ± 4    49 ± 18   80 ± 5    94 ± 2 91 ± 2        96 ± 2     95 ± 2
+           antmaze-large-navigate-v0
+                                           task4     14 ± 3     2±2      19 ± 6    64 ± 8 85 ± 11       94 ± 2     93 ± 2
+                                           task5     18 ± 4     5±2      26 ± 9    67 ± 9 85 ± 3        94 ± 3     92 ± 2
+                                           overall   24 ± 2    16 ± 5    34 ± 4    75 ± 6 83 ± 4        91 ± 2     92 ± 1
+                                           task1      0±0       0±0       0±0        1±2        2 ± 2 47 ± 10      66 ± 3
+                                           task2      0±0       0±0       0±0       17 ± 5    21 ± 10 74 ± 5       75 ± 3
+                                           task3      0±0       0±0       0±0       14 ± 8      5±5    55 ± 7      66 ± 3
+           antmaze-giant-navigate-v0
+                                           task4      0±0       0±0       0±0       18 ± 6     35 ± 9 69 ± 5       78 ± 7
+                                           task5      1±1       1±1       1±1       18 ± 5    16 ± 10 82 ± 4       84 ± 3
+                                           overall    0±0       0±0       0±0       14 ± 3     16 ± 3 65 ± 5       74 ± 1
+                                           task1     17 ± 5    35 ± 5    26 ± 5     31 ± 6    35 ± 5     37 ± 5    37 ± 4
+                                           task2     51 ± 5    41 ± 5    58 ± 8    47 ± 22    92 ± 3     66 ± 8    92 ± 2
+                                           task3     22 ± 3    36 ± 8    31 ± 5     35 ± 6    47 ± 4     37 ± 5    45 ± 3
+           antmaze-teleport-navigate-v0
+                                           task4     25 ± 5    45 ± 3    33 ± 5     33 ± 6    50 ± 2     30 ± 2    47 ± 3
+                                           task5     14 ± 6    38 ± 6    26 ± 9     28 ± 8    44 ± 3     41 ± 8    27 ± 3
+                                           overall   26 ± 3    39 ± 3    35 ± 5     35 ± 5    53 ± 2     42 ± 3    50 ± 2
+                                           task1     70 ± 33 76 ± 13 17 ± 12       43 ± 20    43 ± 10   92 ± 2     85 ± 5
+                                           task2     65 ± 19 80 ± 4 22 ± 16        61 ± 12    46 ± 14   94 ± 3     89 ± 2
+                                           task3     21 ± 15 16 ± 12 41 ± 9        72 ± 29    46 ± 17   95 ± 2    95 ± 2
+           antmaze-medium-stitch-v0
+                                           task4      1±2     0±0    32 ± 9        80 ± 9     53 ± 19   93 ± 2    54 ± 11
+                                           task5     70 ± 33 47 ± 20 34 ± 14       41 ± 18     75 ± 8   95 ± 3     93 ± 2
+                                           overall   45 ± 11 44 ± 6 29 ± 6          59 ± 7     53 ± 6   94 ± 1     83 ± 2
+                                           task1    2±2        23 ± 9     0±0        7±5       1±1    85 ± 5 13 ± 12
+                                           task2    0±0         0±0       0±0       10 ± 5     4 ± 4 24 ± 16 4 ± 2
+                                           task3   15 ± 14     69 ± 6    37 ± 10    73 ± 8    43 ± 11 94 ± 3 69 ± 15
+           antmaze-large-stitch-v0
+                                           task4    0±0         0±0       0±0        1±1       5±5    70 ± 8 55 ± 11
+                                           task5    0±0         0±0       0±0        1±1       1±2    60 ± 9 13 ± 7
+                                           overall 3 ± 3       18 ± 2     7±2       18 ± 2    11 ± 2 67 ± 5 31 ± 2
+                                           task1      0±0       0±0       0±0        0±0       0±0       0±1        0±0
+                                           task2      0±0       0±0       0±0        0±0       0±0       5±5        0±0
+                                           task3      0±0       0±0       0±0        0±0       0±0       0±0        0±0
+           antmaze-giant-stitch-v0
+                                           task4      0±0       0±0       0±0        0±0       0±0       3±3        0±0
+                                           task5      0±0       0±0       0±0        2±2       0±0       0±1        1±1
+                                           overall    0±0       0±0       0±0        0±0       0±0       2±2        0±0
+                                           task1     21 ± 13   39 ± 7    12 ± 4     22 ± 6     30 ± 6    44 ± 5    37 ± 3
+                                           task2     39 ± 12   44 ± 6    18 ± 7     22 ± 6     30 ± 4    42 ± 3    44 ± 2
+                                           task3     34 ± 12   36 ± 8    18 ± 4     25 ± 7    23 ± 11    26 ± 4    36 ± 3
+           antmaze-teleport-stitch-v0
+                                           task4      46 ± 6   44 ± 4    18 ± 5     24 ± 9     38 ± 4    26 ± 4    35 ± 2
+                                           task5     16 ± 14   33 ± 6    17 ± 6     26 ± 5     32 ± 7    40 ± 6    40 ± 8
+                                           overall    31 ± 6   39 ± 3    17 ± 2     24 ± 5     31 ± 4    36 ± 2    38 ± 1
+
+
+
+
+                                                                 18
+                               SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+
+
+
+Table 7. Full results, part 2. The success rate is averaged over 4 random seeds. Bold values indicate the best performance in each row.
+Baseline performances are the official results provided by OGBench (Park et al., 2025a).
+
+         Environment                           Task      GCBC      GCIVL GCIQL          QRL        CRL      HIQL      HSVL
+                                         task1            4±1      22 ± 5    23 ± 6    12 ± 7 84 ± 3        95 ± 2    92 ± 1
+                                         task2            8±4      42 ± 8    49 ± 6    25 ± 8 80 ± 5        96 ± 2    93 ± 1
+                                         task3           12 ± 3    15 ± 3    12 ± 6   25 ± 10 43 ± 11       79 ± 6    88 ± 2
+         humanoidmaze-medium-navigate-v0
+                                         task4            2±1       0±0       1±0      16 ± 7  5±5          75 ± 6    89 ± 2
+                                         task5           12 ± 4    40 ± 8    51 ± 8   29 ± 12 87 ± 7        97 ± 1    94 ± 2
+                                         overall          8±2      24 ± 2    27 ± 2    21 ± 8 60 ± 4        89 ± 2    91 ± 0
+                                               task1      1±1       6±2       3±2      3±2       36 ± 11 67 ± 4       73 ± 3
+                                               task2      0±0       0±0       0±0      0±0         0±0    2±3          8±6
+                                               task3      3±1       6±2       5±2      17 ± 6    54 ± 17 88 ± 3       93 ± 3
+         humanoidmaze-large-navigate-v0
+                                               task4      2±1       0±0       1±1      4±2       23 ± 11 42 ± 11      89 ± 2
+                                               task5      1±1       1±1       1±1      2±1         6 ± 4 47 ± 10      68 ± 7
+                                               overall    1±0       2±1       2±1      5±1        24 ± 4 49 ± 4       66 ± 1
+                                               task1      0±0       0±0       0±0       0±0       1±1       13 ± 7    74 ± 3
+                                               task2      0±0       1±1       1±1       2±1       9±5      35 ± 11    76 ± 3
+                                               task3      0±0       0±0       0±0       0±0       2±2       11 ± 4    79 ± 1
+         humanoidmaze-giant-navigate-v0
+                                               task4      0±0       0±0       0±0       0±0       3±2        2±2      83 ± 2
+                                               task5      1±1       0±0       1±1       2±1       1±1        2±2      93 ± 2
+                                               overall    0±0       0±0       0±0       1±0       3±2       12 ± 4    81 ± 1
+                                               task1   20 ± 7      13 ± 3    12 ± 3     6±5      27 ± 7     84 ± 5    90 ± 2
+                                               task2   49 ± 12      7±2       8±5      13 ± 4    37 ± 7     94 ± 2    94 ± 1
+                                               task3   24 ± 8      25 ± 3    20 ± 7    30 ± 6    40 ± 4     86 ± 4    91 ± 2
+         humanoidmaze-medium-stitch-v0
+                                               task4    3±2         1±1       2±2      18 ± 5    28 ± 7     86 ± 4    79 ± 5
+                                               task5   49 ± 8      16 ± 3    18 ± 7    22 ± 2    49 ± 5     90 ± 4    94 ± 1
+                                               overall 29 ± 5      12 ± 2    12 ± 3    18 ± 2    36 ± 2     88 ± 2    89 ± 1
+                                               task1    3±4         2±1       1±1      0±0       0±0        21 ± 5    16 ± 4
+                                               task2    0±0         0±0       0±0      0±0       0±0         5±2       1±1
+                                               task3   20 ± 11      3±2       1±1      16 ± 7    13 ± 3     84 ± 4    83 ± 4
+         humanoidmaze-large-stitch-v0
+                                               task4    2±1         1±1       0±1      1±1       4±1        19 ± 4    51 ± 5
+                                               task5    2±2         1±1       0±0      0±0       3±1        12 ± 2    18 ± 4
+                                               overall 6 ± 3        1±1       0±0      3±1       4±1        28 ± 3    34 ± 2
+                                               task1      7±3      57 ± 6    71 ± 9     6±2      20 ± 6     15 ± 5    16 ± 1
+                                               task2      5±2      51 ± 6    71 ± 6     5±2      20 ± 4     16 ± 5    11 ±2
+                                               task3      7±3      55 ± 6    70 ± 6     4±1      21 ± 6     16 ± 3    20 ± 4
+         cube-single-play-v0
+                                               task4      4±2      50 ± 4    61 ± 8     4±2      16 ± 3     14 ± 5    10 ± 2
+                                               task5      4±2      52 ± 6    67 ± 7     4±3      15 ± 3     13 ± 4    12 ± 4
+                                               overall    6±2      53 ± 4    68 ± 6     5±1      19 ± 2     15 ± 3    14 ± 2
+                                               task1      5±1      17 ± 4    99 ± 2     3±2      11 ± 3     29 ± 4    67 ± 4
+                                               task2      2±1      4±2       96 ± 3     0±0      2±1        11 ± 3    58 ± 7
+                                               task3      1±1      3±1       95 ± 1     0±0      1±1         7±3      42 ± 3
+         puzzle-3x3-play-v0
+                                               task4      1±1      3±1       91 ± 3     0±0      2±1         5±1      46 ± 3
+                                               task5      1±0      2±1       94 ± 2     0±0      2±1         8±3      54 ± 5
+                                               overall    2±0      6±1       95 ± 1     1±0      3±1        12 ± 2    54 ± 3
+
+
+
+
+                                                                  19
+                              SVL: Goal-Conditioned Reinforcement Learning as Survival Learning
+
+
+
+
+Table 8. Full results, part 3. The success rate is averaged over 4 random seeds. Bold values indicate the best performance in each row.
+Baseline performances are the official results provided by OGBench (Park et al., 2025a).
+
+     Environment                                   Task      GCBC      GCIVL GCIQL         QRL       CRL       HIQL      HSVL
+                                                   task1     17 ± 6    30 ± 7    16 ± 3    0±0      92 ± 2    90 ± 4    92 ± 1
+                                                   task2      8±2      21 ± 6     7±2      0±0      94 ± 2    92 ± 7    96 ± 1
+                                                   task3     17 ± 1    24 ± 5    16 ± 4    0±0      98 ± 1    94 ± 4    96± 1
+     visual-antmaze-medium-navigate-v0
+                                                   task4     12 ± 2    21 ± 3    9±2       0±0      94 ± 2    94 ± 2    95 ± 1
+                                                   task5      4±2      16 ± 5     6±2      0±0      94 ± 2    94 ± 5    96 ± 2
+                                                   overall    11 ±     22 ± 2    11 ± 1    0±0      94 ± 1    93 ± 4    95 ± 1
+                                                   task1     3±1       7±2       4±3       0±0      78 ± 5    60 ± 10   82 ± 4
+                                                   task2     4±3       4±1       2±1       0±0      80 ± 3     28 ± 9   82 ± 5
+                                                   task3     4±2       6±2       4±1       1±1      90 ± 3    85 ± 10   96 ± 1
+     visual-antmaze-large-navigate-v0
+                                                   task4     4±2       5±3       6±1       0±1      88 ± 3     46 ± 7   84 ± 4
+                                                   task5     4±2       5±1       4±2       0±0      83 ± 2    44 ± 10   81 ± 3
+                                                   overall   4±0       5±1       4±1       0±0      84 ± 1     53 ± 9   85 ± 2
+                                                   task1     0±0       0±0       0±0       0±0      17 ± 2     2±1      45 ± 4
+                                                   task2     1±1       2±1       1±1       0±0      73 ± 9     12 ± 8   68 ± 4
+                                                   task3     0±0       0±0       0±0       0±0      22 ± 6     2±3      43 ± 8
+     visual-antmaze-giant-navigate-v0
+                                                   task4     0±1       0±1       0±0       0±0      47 ± 5     4±2      65 ± 4
+                                                   task5     1±1       2±3       1±1       0±1      77 ± 5    13 ± 11   83 ± 4
+                                                   overall   0±0       1±1       0±0       0±0      47 ± 2     6±4      61 ± 1
+                                                   task1      2±2       6±1      2±1       3±2      32 ± 3    32 ± 5    34 ± 4
+                                                   task2      6±3       9±3      9±2       6±4      73 ± 8    40 ± 6    71 ± 4
+                                                   task3      9±1      12 ± 3    9±2      10 ± 4    47 ± 3    33 ± 1    39 ± 2
+     visual-antmaze-teleport-navigate-v0
+                                                   task4     10 ± 2    10 ± 2    8±3      6±4       50 ± 4    44 ± 5    37 ± 5
+                                                   task5      1±1       3±1      3±1       4±2      36 ± 5    33 ± 7    26 ± 5
+                                                   overall    5±1       8±1      6±1       6±3      48 ± 2    37 ± 2    41 ± 1
+                                                   task1   80 ± 4      0±1       0±0       0±0     33 ± 4     75 ± 8    93 ± 2
+                                                   task2   90 ± 4      1±2       0±0       0±0     69 ± 5     85 ± 7    88 ± 3
+                                                   task3   69 ± 18     15 ± 6    8±1       0±0      88 ± 1    92 ± 1    82± 7
+     visual-antmaze-medium-stitch-v0
+                                                   task4    1±1        7±4       3±1       0±1     70 ± 12    88 ± 4     0± 1
+                                                   task5   97 ± 1      6±3       1±1       0±0     85 ± 5     93 ± 1    83± 15
+                                                   overall 67 ± 4      6±2       2±0       0±0     69 ± 2     87 ± 2    69± 3
+                                                   task1     37 ± 4    2±2       1±1       0±0      20 ± 5    36 ± 5    36 ± 15
+                                                   task2     36 ± 3    2±1       1±1       1±1      40 ± 9    38 ± 3    42 ± 3
+                                                   task3     17 ± 6    2±1       2±1       3±4      32 ± 9    36 ± 5     8 ± 10
+     visual-antmaze-teleport-stitch-v0
+                                                   task4     39 ± 9    1±1       0±0       2±3      45 ± 7    37 ± 6     39 ± 9
+                                                   task5     29 ± 1    1±1       1±1       1±1      22 ± 9    38 ± 5      3±2
+                                                   overall   32 ± 3    1±1       1±0       1±2      32 ± 6    37 ± 4     25 ± 5
+                                            task1            0±0       0±0       0±0       0±0      0±0        0±0      21 ± 4
+                                            task2            0±0       0±0       0±0       0±0      0±0        0±0      14 ± 7
+                                            task3            0±0       0±0       0±0       0±0      2±1        0±1      30 ± 3
+     visual-humanoidmaze-medium-navigate-v0
+                                            task4            0±0       0±0       0±0       0±0      0±0        0±0      13 ± 2
+                                            task5            0±0       0±0       0±0       0±0      3±2        0±0      34 ± 3
+                                            overall          0±0       0±0       0±0       0±0      1±0        0±0      22 ± 2
+                                                   task1     0±0       0±0       0±0       0±0      0±0        0±0      21 ± 5
+                                                   task2     0±0       0±0       0±0       0±0      0±0        0±0      18 ± 3
+                                                   task3     3±1       0±0       0±0       0±0      0±0        0±0       5±2
+     visual-humanoidmaze-medium-stitch-v0
+                                                   task4     0±0       0±0       0±0       0±0      3±2        1±2       0±1
+                                                   task5     1±1       0±0       0±0       0±0      0±0        0±0      32 ± 3
+                                                   overall   1±0       0±0       0±0       0±0      1±0        0±0      15 ± 1
+
+
+
+
+                                                                 20
+

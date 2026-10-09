@@ -1,0 +1,978 @@
+                                             OOPSIEVERSE: A Safety Benchmark with
+                                          Damage-Aware Simulation for Robot Manipulation
+                                               Arnav Balaji*, Arpit Bahety*, Sriniket Ambatipudi, Daniel Lam, Junhong Xu, Roberto Martı́n-Martı́n
+                                                                                The University of Texas at Austin
+                                                                              *Equal Contribution; order by dice roll
+
+
+                                            Abstract—While robotic manipulation capabilities have ad-
+                                         vanced rapidly, physical safety remains a major barrier to
+                                         deploying household robots: task success is insufficient if the robot
+                                         damages itself or its surroundings. Simulation offers a harm-free
+arXiv:2606.31993v1 [cs.RO] 30 Jun 2026
+
+
+
+
+                                         alternative to costly and dangerous real-world training and eval-
+                                         uation, yet existing simulators lack general mechanisms to detect,
+                                         quantify, and represent damage. To address this gap, we introduce
+                                         OOPSIEVERSE, a unified simulation framework and benchmark
+                                         for damage-aware household manipulation. At a theoretical level,
+                                         OOPSIEVERSE augments an existing Markov Decision Problem
+                                         with additional damage-related observations, rewards and/or
+                                         termination conditions based on user preferences. OOPSIEVERSE
+                                         provides damage as an explicit, physically-grounded, and task-
+                                         agnostic signal by converting sources such as contact forces,
+                                         temperature changes, and liquid interactions into corresponding
+                                         mechanical, thermal or fluid damage. OOPSIEVERSE comprises              Fig. 1: Oops, did I do that? Robots trained and evaluated in simulation
+                                         two core elements: (1) DAMAGESIM, a simulator-agnostic frame-           are unaware of the real-world damage their actions would cause, such
+                                         work for detecting and quantifying damage during navigation             as applying excessive forces, heating or freezing inappropriate objects,
+                                         and manipulation, and (2) a suite of household tasks designed to        or spilling water on delicate items. OOPSIEVERSE addresses this
+                                         evaluate common damage modes and distinguish between task               gap by providing DamageSim, a general damage-aware simulation
+                                         completion and safe execution. We demonstrate the generality of         framework, including a plugin for multiple simulators (instantiated
+                                         our framework by instantiating DAMAGESIM in two simulators              in Omniverse and MuJoCo) and OopsieBench, a benchmark of 32
+                                         with different physics backends, OmniGibson (Nvidia Omniverse)          household manipulation tasks for evaluating and developing safe
+                                         and RoboCasa (MuJoCo). We further showcase the utility of               robotic solutions.
+                                         OOPSIEVERSE across multiple use cases, including (1) guiding
+                                         safer demonstration collection via real-time damage feedback, (2)
+                                         learning safer manipulation policies through damage-conditioned
+                                         imitation learning and reinforcement learning, (3) benchmarking         trained or evaluated under this abstraction may therefore appear
+                                         the safety of state-of-the-art Vision Language Action policies, and     successful in simulation while relying on behaviors that would
+                                         (4) improving real-world safety of sim-to-real transferred policies.
+                                         Together, our results highlight the potential of OOPSIEVERSE as         be unsafe or destructive when deployed (see Fig. 1); avoiding
+                                         an open-source foundation for systematic, scalable research on          such behaviors requires task-specific reward shaping or hand-
+                                         safe robot manipulation. For code and additional information,           designed constraints that are brittle and difficult to scale across
+                                         please refer to https://robin-lab.cs.utexas.edu/oopsieverse/            diverse environments and damage sources.
+                                                                                                                    In this work, we introduce OOPSIEVERSE, a simulation
+                                                                I. I NTRODUCTION                                 framework for safety-aware robotics in household manipulation
+                                            A central goal of robotics is to build capable assistants that       settings. Our framework enables training and systematic
+                                         can solve complex manipulation tasks in real-world environ-             evaluation of safety by explicitly modeling damage incurred
+                                         ments. However, training and evaluating such systems directly           during task execution. OOPSIEVERSE consists of two core
+                                         in the physical world is difficult, expensive, and potentially          components: DAMAGESIM and OOPSIEBENCH.
+                                         unsafe, particularly when interactions involve damageable                  First, DAMAGESIM is a damage detection plugin for object-
+                                         objects or the robot itself. Simulation is therefore widely used as     centric detection, tracking and quantification of damage in
+                                         a safe alternative, enabling learning and evaluation without real-      manipulation and navigation tasks in household domains.
+                                         world consequences. However, this safety is largely artificial:         DAMAGESIM models the three most common object and robot
+                                         most simulators do not model or measure the damage that                 damage sources in this domain (see Fig. 3): 1) mechanical
+                                         would result from unsafe interactions in the real world. As             damage, produced by excessive forces due to impact and drops,
+                                         a result, manipulation benchmarks typically define success              or excessive compression or tension that deform or break
+                                         solely in terms of goal completion, making no distinction               objects, 2) thermal damage, arising from exposure to extreme
+                                         between behaviors that would be benign in the real world and            temperatures, such as contact with hot surfaces, flames, or
+                                         those that would succeed only by causing damage. Policies               freezing temperatures, and 3) fluid damage, produced from
+contact between liquids and objects that cause corrosion, or          More recent learning-based approaches aim to incorporate
+short-circuit electronics. For each damage source, DAMAGESIM safety through learned reachability, value functions, recovery
+continuously computes a unified damage value based on policies, or constraints that steer agents away from unsafe
+the simulator state (e.g., contact forces, temperatures, and regions [11, 12, 13, 14, 15, 16, 17]. While effective in
+liquid interactions) and object-dependent characteristics and specific settings, these methods typically rely on hand-designed
+tracks it in an object-centric health value. This provides unsafe scenarios or task-specific cost functions, limiting their
+a task-agnostic safety signal that can be applied uniformly generality and making cross-task evaluation challenging [18].
+across environments, tasks, objects and robots. Significantly, OOPSIEVERSE is inspired by these approaches but targets a
+DAMAGESIM is not bounded to a specific simulator: we complementary goal: providing standardized environments and
+provide as part of OOPSIEVERSE implementations of DAM- physically grounded damage models where such methods can
+AGE S IM in Behavior-1K/OmniGibson [1] (based on Nvidia’s be trained and evaluated consistently.
+Omniverse [2]) and RoboCasa/Robosuite [3, 4] (based on                Safety Benchmarks. Several benchmarks have been pro-
+DeepMind’s MuJoCo [5]).                                            posed to study safe reinforcement learning. Safety Gym
+   Second, OOPSIEBENCH is a suite of 32 ready-to-use house- and its successor Safety-Gymnasium encode safety through
+hold manipulation tasks designed to expose the distinction constraint costs such as collisions or proximity to obstacles,
+between goal achievement and safe execution measurable focusing primarily on ‘navigation and low-dimensional con-
+thanks to DAMAGESIM. The tasks span diverse scenes, objects, trol tasks[19, 20]. Similarly, safe-control-gym and GUARD
+and interaction patterns, and include both short-horizon settings standardize constrained RL problems across classic control
+that isolate individual damage modalities and longer-horizon domains [21, 22], while AI Safety Gridworlds study abstract
+scenarios that require sustained safety-aware decision making. safety failures such as reward hacking in discrete environ-
+Each task admits multiple solution strategies, including unsafe ments [23]. DSRL introduces a platform tailored for offline safe
+goal-achieving shortcuts and alternative strategies that complete reinforcement learning [24] and ReDMan designs a benchmark
+the objective without causing harm, enabling systematic evalu- for safe dexterous manipulation [25]. HASARD introduces a
+ation of safety–performance trade-offs. We include a dataset vision-based safe RL benchmark built on the game DOOM,
+of human-collected demonstrations as part of the benchmark. with scalar safety costs for hazards such as lava [26]. While
+As DAMAGESIM, OOPSIEBENCH is cross-platform, including valuable for theoretical and algorithmic study, these benchmarks
+17 tasks defined in OmniGibson and 15 tasks in RoboCasa. express safety through task-specific constraints or abstract costs
+We believe this will broaden the accessibility to our work.        rather than explicit models of physical damage.
+   To demonstrate the wide range of uses of OOPSIEVERSE,              In the context of household manipulation, large-scale sim-
+we evaluate it across a range of learning and data-generation ulation benchmarks such as BEHAVIOR-1K [1] and Robo-
+settings. First, we integrate live damage feedback in a teleopera- Casa [3] provide diverse, realistic tasks built on simulators like
+tion interface and show that it leads to significantly safer human OmniGibson and MuJoCo [5]. These benchmarks emphasize
+demonstrations for several OOPSIEBENCH tasks. Second, we long-horizon manipulation and human-centric activities but
+train safe imitation learning policies by using the damage feed- define success purely in terms of goal completion; safety
+back from DAMAGESIM to discourage using unsafer samples considerations must be encoded manually via rewards or
+during the training process. Third, we use OOPSIEVERSE to termination conditions. In contrast, OOPSIEVERSE through
+develop a damage-aware reinforcement learning procedure that the plugin DAMAGESIM augments such environments with a
+reduces damage, demonstrating the utility of our framework reusable, physics-grounded notion of damage that distinguishes
+as universal safety reward. Finally, we evaluate some of the safe from unsafe task execution independent of task success.
+learned policies in the real world demonstrating the safer            Overall, OOPSIEVERSE, with its simulation plugin DAMA-
+behaviors obtained thanks to OOPSIEVERSE. OOPSIEVERSE, GESIM and associated benchmark of safety household tasks
+with DAMAGESIM and OOPSIEBENCH, provides a general, OOPSIEBENCH, complements existing safe learning methods
+practical, and scalable way to train and evaluate manipulation and simulation benchmarks by providing a unified framework
+policies not only for task completion, but also for safety and that exposes the physical consequences of actions through
+we hope this tool facilitates research in this area.               measurable damage signals, enabling scalable evaluation and
+                                                                   development of safety-aware manipulation policies.
+                       II. R ELATED W ORK
+
+   Safety in Robotics. Safety has long been a central concern
+in robotics, with early approaches grounded in control theory                           III. DAMAGESIM
+and reachability analysis, including control barrier functions,
+Hamiltonian methods, and related formulations [6, 7, 8, 9].          In this section we introduce DAMAGESIM, our simulation-
+These methods provide strong safety guarantees but require based damage evaluation framework. After introducing our
+explicit definitions of safe and unsafe states and accurate system conceptual framing for a damage-aware POMDP formulation,
+models, making them difficult to scale to complex, contact-rich we describe how we compute mechanical, thermal, and fluid
+manipulation scenarios [10].                                       damage signals from the simulator.
+                                            OopsieVerse environment                                      B. Damage-Aware POMDP Implementation: DAMAGESIM
+           𝑎! ∈ 𝐴                                                DamageSim                  DEM
+                          physics simulator                                                  DEM
+                                                                                              DEM            While existing specialized simulators can compute complex
+                                                                                 𝑑!"#
+                               𝑠! ∈ 𝑆
+                                                                                                         damage such as fracture mechanics [29] or thermal effects,
+                                                                         ℎ! ∈ 𝑆 "                        they rely on ad-hoc physical computation and detailed material
+   agent                                           𝑆 #$ = S×𝑆 "                         𝑠!#$ ∈ 𝑆 #$      properties, far from what existing robotics simulators provide.
+  𝜋(𝑜! )            𝑜! ∈ 𝑂 𝑟! (𝑠! , 𝑎! )   task-completion
+                                                                   damage-aware
+                                                                   terminal states                       Our goal in DAMAGESIM is instead to expose a portable,
+                                            terminal states                                              physically grounded, task-agnostic signal that approximates
+                                                              𝑜!#$ ∈ 𝑂#$             𝑟!#$ (𝑠 #$ , 𝑎! )
+                                                                                                         real-world damage, can be computed based on common values
+                                                                                                         provided by robotics simulators (forces, motion,. . . ), and can
+Fig. 2: Damage-Augmented POMDP Implementation with DAM-                                                  be used consistently for evaluation and learning. To achieve
+AGE S IM in O OPSIE V ERSE. Conceptually, our DAMAGE S IM plugin                                         this goal, we represent damage through an explicit, unifying
+(blue) extends an existing POMDPs in simulation (green, dotted arrow                                     “health” state, an additional object-centric state variable that
+to agent) by augmenting the state with health. The health state can in                                   keeps the original task dynamics intact while still modeling
+turn influence the observations and rewards, and/or provide access to                                    the irreversible consequences of unsafe interactions. Health
+new damage-aware terminal states. DAMAGESIM implements the health
+state to augment the original POMDP state into a Damage Aware                                            is tracked for each object and the robot by aggregating
+steate (sDA ∈ S DA = S × S h ) as a per-object object physical property,                                 and accumulating damage in their composing links caused
+updated at every timestep by a set of damage evaluator models (DEM)                                      by different sources such as mechanical, thermal, and fluid
+that compute mechanical, thermal, and fluid damage (dDEM ) from                                          elements.
+simulator state and interactions, reducing per-entity health accordingly.
+The augmented POMDP provided by DAMAGESIM approximates better
+                                                                                                             Concretely, we assume the simulated scene contains multiple
+the conditions of the real-world task.                                                                   objects, E = {e1 , . . . , eN }, each one composed of one or
+                                                                                                         multiple links, (l1 . . . , lM ), whose common physical state (pose,
+                                                                                                                                                                    l
+                                                                                                         velocity, forces acting on it through contact, etc.) seji , can be
+A. Damage-Aware POMDP Formulation                                                                        retrieved from an underlying physics simulator. To augment
+                                                                                                         this state, we keep track of the health of each link of an object,
+                                                                                                           l
+   Robotic tasks can be formulated as Partially Observable                                               heji , and associate an object health to the minimum health of its
+Markov Decision Processes (POMDP) [27] defined by the tuple                                              links, hei = min(hle1i , . . . , hleM
+                                                                                                                                             i
+                                                                                                                                               ). This provides a semantically
+M = (S, A, T , R, Ω, O, γ), where s ∈ S is the state space,                                              meaningful health understanding: an object (or the robot) is
+a ∈ A the action space, T (s′ | s, a) the transition function,                                           fully damaged when one or more of its links are fully damaged.
+R(s, a) the reward function, o ∈ Ω the observation space, O(o |                                          We rank health to range between a maximum value, hM AX
+s) the observation function, and γ ∈ [0, 1) the discount factor.                                         (completely undamaged), and 0 (completely damaged) for all
+In most existing simulators, this POMDP is specified purely                                              objects and links, and use a unifying scale for all objects
+in a task-completion-centric manner: the state, reward, and                                              (hM AX = 100) that enables easy comparisons of health state.
+termination conditions only reflect whether the task has been                                            The overall environment health state at time t is given by:
+completed. However, this neglects a common characteristic of                                             ht = {he1 , . . . , heN }. The link health values are updated using
+the real world problems: to be correctly completed, the agent                                            a set of k Damage Evaluation Models (DEM). Each DEM
+should avoid damaging the objects and itself when completing                                             models a specific source of physical damage (e.g., mechanical
+the task [28]. By omitting such damage considerations from the                                           damage, thermal damage, etc.) using the current simulator state,
+state, the resulting behaviors in simulation may seem successful,                                        st , to output a damage value dDEMk . The aggregated damage
+while leading to dangers that cannot be executed in the real                                             value across all DEMs represents      P the decrease in the object’s
+world.                                                                                                   health: hei (t) = hei (t − 1) − k dDEMk (t).
+   To address this divergence between sim and real, we propose                                               Mechanical Damage Evaluation Model: Mechanical dam-
+a damage-aware POMDP MDA , an augmentation of the original                                               age captures contact-induced harm that leads to undesired
+simulation POMDP that explicitly includes a health state,                                                effects such as cracking, deformation, or breakage. In household
+h ∈ S h , enabling the approximation of damage-inducing                                                  manipulation, such damage typically arises from two classes of
+processes absent in existing simulators (see Fig. 2). In the                                             interactions: i) impulsive events that causes rapid changes in an
+damage-aware POMDP, MDA , the health-augmented state                                                     object’s motion (e.g., collisions or drops), and ii) sustained or
+space, sDA ∈ S DA = S ×S h , can serve as basis to generate new                                          constrained contacts in which large forces are applied with little
+damage-aware elements for other components of the POMDP                                                  or no acceleration (e.g., compressing, stretching, or pushing
+—the observations, the termination conditions, the reward—,                                              against a fixed surface). While these regimes can be charac-
+better approximating the real-world task.                                                                terized using detailed physical quantities –such as momentum
+   In the following, we describe how this damage-aware                                                   change or structure load analysis– computing them accurately is
+POMDP is instantiated in practice through our DAMAGESIM                                                  computationally expensive and unnecessary for distinguishing
+plugin, and how object health is computed by tracking and                                                safe from unsafe behaviors. Instead, we approximate both
+updating damage based on physically grounded interaction                                                 regimes using a unified proxy derived from states available in
+signals.                                                                                                 standard robotics physics simulators, producing health-reducing
+     (a) Impact Damage         (b) Compression Damage         (c) Tension Damage           (d) Thermal Damage            (e) Liquid Damage
+Fig. 3: Types of physical damage detected by DAMAGESIM. Object-level damage caused by excessive a) impact, b) compression forces, or
+c) tensile forces, by d) temperature changes, or by e) water spills are measured and tracked by our simulation plugin, DAMAGESIM, enabling
+learning and evaluating their effect in robot behaviors. In the pictures, the top row shows a state without damage while in the bottom row the
+pictures depict damaged objects (most left: wine bottle, second left: egg, center: cabinet with drawer, second right: robot arm, right: laptop),
+indicated by levels of red color.
+
+
+effects that are qualitatively consistent with real-world object          thresholds and higher damage scaling, while ductile objects
+degradation.                                                              use larger threshold and lower scaling. Fig. 3 a), b) and c)
+   Computing the effect of impulsive vs. constrained/sustained            depict common cases of mechanical damages due to impact,
+forces requires understanding the kinematic (motion) nature of            compression and tension obtained by our mechanical damage
+the links. For each link, at each physics step t, we obtain from          evaluation model.
+the physics simulator the set of contact forces acting on the link,          Thermal Damage Evaluation Model: Thermal damage
+{f1 (t), . . . , fK (t)}, and the link’s kinematic information, which     captures harm from exposure to temperatures outside an object’s
+includes the link acceleration, a(t) (in the following, we drop           safe operating range (e.g., melting, burning, or freeze damage).
+the link suffixes for readability). We can then decompose each            Modeling damage due to thermal harm is thus only possible in
+contact force, fk (t), into components parallel and orthogonal            simulators that keep track of temperature and heat/cold sources.
+to the direction of acceleration â(t): f∥,k (t) = (fk (t)·â(t)) â(t)   Therefore, while our model is object-centric and general, we
+and f⊥,k (t) = fk (t)−f∥,k (t), and aggregate them across contact         provide an implementation of the thermal damage evaluation
+points:                                                                   model of DAMAGESIM only in OmniGibson [1], which provides
+                    X                             X                       the necessary temperature readings.
+      F∥ (t) =          ∥f∥,k (t)∥,      F⊥ (t) =     ∥f⊥,k (t)∥.            Similar to our mechanical damage evaluation model, our
+                 k                               k
+                                                                          thermal evaluation model evaluates if the temperature of an
+Intuitively, F∥ (t) captures contact aligned with the change              object goes over/under physically grounded thresholds and
+in motion (impulsive interactions), while F⊥ (t) captures                 scales the damage according to material properties. At each
+the remaining contact that is not aligned with it (i.e., sus-             timestep t, we retrieve the object temperature (OmniGibson
+tained/constrained loading).                                              provides only temperature per object, not link), T (t), from the
+   Inspired by the materials physics, we approximate the                  underlying physics simulator. Thermal damage is then modeled
+effective mechanical load acting on the link as εmech (t) =               in DAMAGESIM as:
+α F∥ (t) + β F⊥ (t), where α and β are user-specified coeffi-                                                  
+                                                                                               Λhot T (t) − Thot ,    T (t) > Thot ,
+cients that control sensitivity to sustained versus impulsive
+                                                                                             
+                                                                                             
+                                                                                                                 
+loading [30]. For example, a paper cup typically deforms more                   dtherm (t) = Λcold Tcold − T (t) , T (t) < Tcold ,
+easily under sustained compressive loading (e.g., squeezing or
+                                                                                             
+                                                                                             
+                                                                                               0,                     otherwise,
+                                                                                             
+crushing) than under brief impulsive contact (e.g., dropping
+it). Finally, DAMAGESIM models the incremental mechanical where the thresholds (Thot , Tcold ) specify the range of tolerated
+damage at time t as                                             temperatures, and (Λhot , Λcold ) indicate how quickly damage
+                                                      
+           dmech (t) = Λmech max εmech (t) − Emech , 0 ,        accumulates beyond the range based on material properties, e.g.,
+                                                                cookware exhibits high Thot and/or small Λhot , while burnable
+where Emech represents a minimal load threshold analogous to plastic items like toys are defined with a lower Thot and larger
+a material’s yield or fracture limit [29], and Λmech scales the Λhot . Both thresholds can be made very large positive/negative
+rate at which damage accumulates beyond this threshold [31]. values to indicate that an object cannot be damaged by fire or
+Both parameters can be specified per link to reflect material by freezing temperatures. Fig. 3.d depicts an example of the
+properties: brittle (fragile) objects are modeled with lower results of our thermal damage evaluation model.
+      Open Single Door        Shelve Item          Wipe Counter        Place Plate       Turn on Stove           Fill Bowl          Pour Water
+
+
+
+
+         Add Firewood    Prepare Breakfast       Turn on Faucet   Navigate and pick       Serve Pastry       Prepare Coffee   Pick up Scrubber
+
+
+
+
+             Pick Egg       Attach Camera    Place in Microwave      Dishes to Sink        Ignite Wood    Turn on Microwave        Open Drawer
+
+
+
+
+Fig. 4: Tasks in OOPSIEBENCH. The image show 21 different tasks instantiated in Behavior-1k/OmniGibson (built on Nvidia Omniverse)
+and/or RoboCasa/Robosuite (built on DeepMind MuJoCo). The complete task suite includes 32 tasks combining both simulators spanning
+diverse household objects, scenes, and interaction patterns, and is designed to expose agents to potential hazards across multiple damage
+modalities, including mechanical (impact, compression, tension), thermal, and fluid interactions (main damage modality per task is indicated
+with icons at the top left corner of each image).
+
+
+   Fluid Damage Evaluation Model: Fluid damage models                    and household interactions such as opening doors/drawers,
+harm from liquid exposure (e.g., swelling, contamination, or             operating appliances, pick-and-place, grasping and shelving
+short-circuiting). Similar to thermal damage, fluid damage               fragile objects, wiping a surface, and navigation followed by
+can only be modeled for simulators that represent fluids;                placement. We additionally include simulator-specific tasks that
+we provide an implementation of the fluid damage model                   stress damage modes that are more naturally supported by a
+in DAMAGESIM only in OmniGibson, which provides the                      given backend or scene library. In RoboCasa, we include longer-
+necessary fluid computation.                                             horizon composite tasks (see Appendix) that chain multiple
+   Analogous to the previous evaluation models, in our fluid             atomic skills in kitchen settings. In OmniGibson, we include
+damage evaluation model we compute whether the fluid                     tasks that explicitly stress fluid and thermal risks in contact-rich
+particles in contact with a link go over a given threshold               settings (e.g., pouring water near electronics, interacting with
+and scale the effect into damage based on the resistance of the          running water, and operating near fire/heat), as well as long-
+link to liquid harm. At each timestep t, we retrieve the amount          horizon activities adapted from BEHAVIOR-style household
+of liquid particles in contact with each link, cℓ (t). DAMAGESIM         scenarios.
+then models fluid damage as:                                                Across the suite, damaging shortcuts arise from realistic
+                                                                        interaction pressures: slamming or forcing articulated objects
+            dfluid (t) = Λfluid max cℓ (t) − Cfluid , 0 ,
+                                                                         (mechanical damage), operating near liquids and sensitive
+where threshold Cfluid controls how much exposure is tolerated           objects (fluid/electrical risk), and handling objects near heat
+before damage begins, and Λfluid controls the rate at which              sources (thermal damage). This structure lets us evaluate not
+damage accumulates thereafter. Waterproof objects can be mod-            only whether a policy reaches the goal, but whether it does so
+eled with large Cfluid and/or near-zero Λfluid , while electronics       without incurring damage as quantified by OOPSIEVERSE. We
+or liquid-delicate materials are defined with a low Cfluid and           provide the full task list, simulator instantiations, and per-task
+larger Λfluid . Fig. 3.e depicts an example of the damage due to         metadata in the Appendix.
+fluid obtained with our fluid damage evaluation model.                      Furthermore, as part of OOPSIEBENCH, we provide 90
+                       IV. OOPSIEBENCH                                   demonstrations across five tasks (Shelve Cereal Box, Lift
+                                                                         Egg, Add Firewood, Pour Water, Wipe Countertop), evenly
+   We introduce a suite of 32 task instances across the                  split between demonstrations collected with and without the
+two simulators (OmniGibson/OmniVerse for B1K tasks and                   DAMAGE S IM plugin (see Fig. 6 and Sec. V-A).
+MuJoCo for RoboCasa tasks), corresponding to 21 unique task
+designs (see Fig. 4). The suite is built to (i) expose policies                                  V. E XPERIMENTS
+to physically damaging failure modes that arise naturally in
+household manipulation, and (ii) make the safety distinction               Our experiments are designed to demonstrate the utility and
+measurable: for most tasks there exists an easy, tempting                versatility of OOPSIEVERSE as a safety framework for robotic
+strategy that completes the goal but risks damage, alongside a           manipulation. We validate our framework by demonstrating
+safer strategy that typically requires more careful interaction          the following use cases across two simulators (OmniGibson
+(e.g., gentler contacts, safer approach directions, or avoiding          and Robocasa):
+hazardous regions/objects).                                               A. Does OOPSIEVERSE provide a sufficiently accurate signal
+   We include a shared core of short- and medium-horizon                      to collect safer data and/or to train safer policies with
+tasks instantiated in both simulators, spanning common kitchen                imitation learning (Sec. V-A)?
+        Shelve Cereal Box                Lift Egg               Add Firewood                Pour Water              Wipe Countertop
+
+Fig. 5: Imitation Learning with OOPSIEVERSE. Task completion rate (solid bar) and safe task completion rate (striped bar) for policies
+trained with only demonstrations collected without health feedback (blue), only demonstrations collected with health feedback (orange), all
+the demonstrations (green), all demonstrations filtering entire episodes (red) and individual datapoints (purple) with health losses > 5, for 5
+tasks from OOPSIEBENCH. While using all demonstrations achieve higher task completion rates, they lead to significant unsafe execution
+(low safe task completion). Variants of IL using health information obtain higher safe task execution with minimal drop in task completion,
+indicating that OOPSIEVERSE’s information is a strong source for safe IL policy learning.
+
+
+ B. Can OOPSIEVERSE’s extended state be used to define
+    safety-related reward to train/finetune policies with rein-
+    forcement learning (Sec. V-B)?
+ C. Does OOPSIEVERSE reveal safety gaps in state-of-the-art
+    VLA models that standard simulators miss (Sec. V-C)?
+ D. Do the safety behaviors trained in OOPSIEVERSE transfer
+    to real robot tasks (Sec. V-D)?
+A. OOPSIEVERSE for Imitation Learning
+   We investigate whether OOPSIEVERSE’s damage-aware feed-
+back can improve imitation learning in two distinct ways: by
+improving demonstration quality at collection time through
+real-time feedback, and by enabling automated curation of safe
+data from mixed-quality datasets without manual annotation.
+We consider five tasks spanning different damage failure modes
+from our task suite: shelving an item (mechanical damage),
+pouring water near sensitive objects (fluid damage), adding
+firewood to a fireplace (thermal damage), wiping dirt from
+a table (mechanical damage), and picking up a fragile egg
+(mechanical damage).
+   For each task, human operators collected demonstrations un- Fig. 6: Real-time damage visualization provided by DAMAGESIM.
+der two conditions. In the health-feedback condition, operators The interface tracks and displays to the teleoperator the per-object
+                                                                    health as the interactions occur, enabling immediate identification
+viewed real-time health bars provided by DAMAGESIM during and reaction to unsafe behaviors. It displays the health in two
+teleoperation (see Fig. 6 for a visualization of the interface). In complementary ways: health bars, which allow for visualizing the
+the no-health-feedback condition, operators can only observe health of objects out of frame, and as object coloration, which gives
+the video frames without the health feedback, matching the an intuitive cue of damage. These overlays are available in both
+standard simulator teleoperation setup. In the health-feedback simulators and can be enabled alongside standard teleoperation or
+                                                                    policy execution.
+condition, DAMAGESIM augments the interface with real-time
+safety visualizations in two ways. First, each damage-tracked
+object is associated with a live health bar that initializes at 100
+                                                                    health bars and damage coloration provide complementary
+and decreases as damage accumulates. This allows operators
+                                                                    feedback to the user without changing the existing physics of
+to immediately identify unsafe interactions, including failures
+                                                                    the simulator. Using these demonstrations, we train flow-based
+that may occur outside the current camera view (e.g., the wine
+                                                                    [32] imitation learning policies with action chunking under
+bottle falling behind furniture and being out of frame in Fig. 6).
+                                                                    five data regimes:
+Secondly, DAMAGESIM can also optionally apply damage-based
+coloration, progressively tinting damaged objects red as health All Data: keeps all demonstrations regardless of collection
+decreases. This provides an intuitive cue about which parts              condition, establishing baseline performance without any
+of the scene are experiencing unsafe interactions. Together,             data curation.
+With Health Feedback: exclusively retains demonstrations col-
+     lected with live health feedback, testing whether real-time
+     feedback during collection provided by OOPSIEVERSE
+     improves imitation learning policy safety.
+Without Health Feedback: keeps demonstrations collected
+     without feedback, providing a lower bound comparison
+     on safety.
+Health-Filtered Episodes: removes episodes from the full
+     dataset where any object’s health falls below 95 at
+     any timestep, testing whether episode-level curation can
+     recover safety from mixed-quality data.
+Health-Filtered Datapoints: removes individual timesteps from
+     the full dataset whose subsequent N steps incur damage
+     exceeding a certain threshold. This filtering strategy is
+     a middle ground between All Data and Health-Filtered
+     Episodes. It preserves more data, but is myopic if N is
+     small. In this experiment, we set N = 8, which is the
+     same as the action chunk length.
+   Fig. 5 presents evaluation results averaged over 30 rollouts      Fig. 7: Trajectory differences based on damage feedback. Trajecto-
+per task. We report two metrics to disentangle task performance      ries generated by the policy trained on w/o health feedback dataset that
+                                                                     is not aware of damage (red) constantly pushes towards fragile objects.
+from safety: Task Completion Rate measures success regardless        In contrast, the policy trained with health-filtered episodes (green)
+of damage, while Safe Task Completion Rate requires both             more frequently directs its trajectories toward the paper bag—even
+task success and all object health remaining above 95. The gap       though interaction is required—resulting in safer task completions.
+between these metrics quantifies how often policies succeed
+through unsafe behaviors. Results reveal a consistent pattern
+across all five tasks: policies trained on unfiltered data (green)   is detected to any object, the agent receives a negative reward
+or data collected without live feedback (blue) achieve high          proportional to the damage caused. In our setup, we use a
+task completion rates but exhibit a substantial gap to safe          simple additive form of the two rewards
+task completion, indicating that these policies complete tasks          r(st ) = Rtask (st ) − w (dmech (t) + dtherm (t) + dfluid (t)) ,
+through unsafe behaviors that standard evaluations would
+overlook. For instance, on Wipe Countertop, the unfiltered           where Rtask denotes the task reward and w controls the
+policy achieves perfect task completion but only 35% safe            weight of the damage penalty. This formulation encourages
+completion. In contrast, policies trained on data leveraging         the policy to complete tasks while minimizing damage across
+OOPSIEVERSE’s damage signal—whether through real-time                all modalities.
+feedback during collection (orange) or post-hoc filtering (red,         We apply Diffusion Steering (DSRL) [33] to the IL policy
+purple)—substantially improves the safe task completion rates.       trained on w/o health feedback from the previous section
+Fig. 7 visualizes the trajectory distributions for the Shelve        on the Shelve Cereal Box task. DSRL optimizes a learnable
+Cereal Box task, comparing policies trained without health           initial noise distribution for the flow-matching policy, steering
+feedback (red) versus with health-filtered episodes (green). The     sampled trajectories toward safe behavior without modifying the
+policy trained on filtered data exhibits a tighter distribution      underlying policy weights. Second, we fine-tune a Gaussian
+concentrated toward the right side of the shelf—a region free        policy pre-trained on mixed-quality demonstrations for the
+of fragile objects. In contrast, the unfiltered policy produces      Move Cup of Water task, a modified version of Pour Water.
+more trajectories that frequently place the cereal box near or       Third, we train an RL policy from scratch on Place Plate,
+against fragile items. These results confirm that OOPSIEVERSE        to verify that OOPSIEVERSE’s reward signal is sufficient for
+provides sufficiently accurate feedback to guide both human          learning safe behaviors without any demonstration data. All
+operators in real time and automated curation after the fact         settings use PPO [34] for optimization; hyperparameters are
+toward safer imitation learning.                                     provided in Appendix.
+                                                                        Fig 8 summarizes evaluation results using the same metrics
+B. OOPSIEVERSE for Reinforcement Learning                            as Section V-A. DSRL improves safe task completion on Shelve
+   We next investigate whether OOPSIEVERSE’s damage signal           Cereal Box from 13% to 33%. Fine-tuning the Gaussian policy
+can serve as a reward for training safe policies via reinforcement   yields a larger gain on Move Cup of Water, increasing safe
+learning. We evaluate three settings of RL training: steering        success from 20% to 100%. These two fine-tuning results
+a pre-trained flow-matching policy, fine-tuning a pre-trained        demonstrate that IL policies can be steered toward safety
+Gaussian policy, and training from scratch.                          using the signals derived from DAMAGESIM. Finally, training
+   Across all settings, we augment the task reward with a            from scratch with DAMAGESIM’s damage penalty achieves over
+damage penalty derived from OOPSIEVERSE: whenever damage             80% safe task completion compared to almost 0% when using
+                                                                         TABLE I: VLA (Gr00t) evaluation on OOPSIEBENCH. C: Task
+                                                                         Completion Rate, SC: Safe Task Completion Rate
+                                                                         Task                                 C [%]   SC [%]   Avg. Health
+                                                                         (B1K-OG) attach camera                 8        4        71.25
+                                                                         (B1K-OG) open microwave door          92        4        33.55
+                                                                         (B1K-OG) pick up scrubber             28        8          85
+                                                                         (B1K-OG) ignite wood                  60        0           8
+                                                                         (RC-MJC) Open Single Door             92       32        50.73
+                                                                         (RC-MJC) Turn On Microwave            92       12        41.48
+                                                                         (RC-MJC) PnP: Counter to Microwave    20       20        29.28
+                                                                         (RC-MJC) Turn On Stove                88        8       0.2192
+          Place Plate       Move Glass of Water   Shelve Cereal Box
+
+Fig. 8: Reinforcement Learning with OOPSIEVERSE. We evaluate
+three RL variants across 3 tasks: training from scratch, fine-tuning a   for benchmarks and learning signals that explicitly account for
+BC-GMM policy, and DSRL fine-tuning. Comparing safe task com-            damaging interactions.
+pletion rates between the baseline that does not use OOPSIEVERSE’s
+health information (blue) and methods that do (orange), shows that       D. Sim-to-real Transfer from OOPSIEVERSE
+OOPSIEVERSE enables learning safer policies both from scratch and
+                                                                    Finally, we test whether safety improvements en-
+through the fine-tuning of existing policies.
+                                                                 abled by DAMAGESIM transfer to the real world. We
+                                                                 train policies in OmniGibson for two tasks—shelve ce-
+task reward alone. These results confirm that OOPSIEVERSE real box and pour water—and evaluate two meth-
+provides a practical reward signal for training safe policies ods: without_live_feedback (damage-unaware) and
+with RL—whether refining existing policies or training new filtered_episodes (damage-aware) on a Franka Panda
+ones—complementing its utility for imitation learning.           robot. For both tasks, the input to the policy is proprioception
+                                                                 and low-dim states (i.e. object poses). We directly transfer the
+C. Benchmarking VLAs on OOPSIEVERSE                              corresponding low-dim policies from sim to real. The action
+   We demonstrate OOPSIEVERSE’s ability to evaluate the safety space is 6 dof delta eef pose and gripper open/close. We use a
+of modern manipulation policies. We benchmark a state-of-the- OSC Pose controller to control the Emika Franka Panda robot.
+art Vision Language Action (VLA) model, NVIDIA GR00T                Because simulator health is not directly observable on
+[35], which achieves strong task performance across a wide hardware, we instead report a qualitative safety outcome
+range of household manipulation scenarios. Our goal is to assess indicating whether the task is completed without observable
+whether such high-performing policies also behave safely, or object damage (e.g., breakage, spills onto sensitive objects, or
+whether task success masks damaging interactions that would unsafe contact). For the shelving task, success is defined as
+be unacceptable in real-world settings.                          placing the cereal box on the shelf, while for the pouring
+   We evaluate GR00T (used off-the-shelf, without any task- task, success requires pouring at least 10ml into the cup.
+specific fine-tuning) on tasks from both OmniGibson and Unsafe behavior includes toppling fragile objects or spilling
+RoboCasa. OmniGibson tasks are long-horizon household water onto a laptop. Aggregated across both tasks (10 trials
+activities, and to focus evaluation on contact-rich interactions per method per task) filtered_episodes achieves a
+where damage is most likely to occur, we benchmark repre- 75% task completion rate, 65% safe completion rate and an
+sentative manipulation subtasks from each activity (reported unsafe behavior rate of 15%, compared to 70% and 5% and
+in parentheses). RoboCasa provides a set of shorter-horizon 75% respectively for without_live_feedback—a 60%
+kitchen manipulation tasks, enabling controlled evaluation in reduction in unsafe behavior rate while maintaining comparable
+atomic interaction settings. We additionally report results for task performance. This shows that explicit damage signals
+pi0 [36] in Appendix E.                                          obtained via OOPSIEVERSE can translate into improved safety
+   We evaluate each task over 30 episodes. For every rollout, we on hardware.
+record three metrics: Task Completion, indicating whether the
+task goal is achieved; Safe Completion, indicating successful                VI. L IMITATIONS AND C ONCLUSION
+task completion without incurring any damage events as              In this work we addressed the problem of evaluating
+measured by DAMAGESIM; and Average Environment Health, and training safe robot policies in simulation. We presented
+defined as the mean normalized health of the environment over OOPSIEVERSE, a novel framework composed of DAMAGESIM,
+the rollout. Together, these metrics distinguish policies that a damage-aware simulation plugin implemented in two widely
+complete tasks from those that complete tasks safely.            used simulators (OmniVerse and MuJoCo), OOPSIEBENCH, a
+   Across both simulators, these results reveal a consistent benchmark with 32 tasks and 450 demonstrations collected
+gap between task performance and safety. Even when GR00T with and without live damage feedback to the teleoperators.
+achieves high task success, it frequently incurs damage, Through a comprehensive evaluation, we demonstrate the utility
+leading to substantially lower safe success rates and degraded of OOPSIEVERSE to train imitation and reinforcement learning
+environment health. This highlights the limitation of evaluating policies, evaluate VLAs for safety, and transfer safe behaviors
+VLAs solely based on task completion and motivates the need to the real world. OOPSIEVERSE is not without limitations:
+                                                                              Sujay Garlanka, Arman Aydin, Sharon Lee, Jiankai Sun,
+                                                                              Mona Anvari, Manasi Sharma, Dhruva Bansal, Samuel
+                                                                              Hunter, Kyu-Young Kim, Alan Lou, Caleb R Matthews,
+                                                                              Ivan Villa-Renteria, Jerry Huayang Tang, Claire Tang,
+                                                                              Fei Xia, Yunzhu Li, Silvio Savarese, Hyowon Gweon,
+                                                                              C. Karen Liu, Jiajun Wu, and Li Fei-Fei. Behavior-1k:
+                                                                              A human-centered, embodied ai benchmark with 1,000
+                                                                              everyday activities and realistic simulation, 2024. URL
+                                                                              https://arxiv.org/abs/2403.09227.
+                                                                        [2]   NVIDIA.         Nvidia omniverse developer overview.
+                                                                              https://docs.omniverse.nvidia.com/dev-overview/latest/
+                                                                              index.html. Accessed 2026-01-31.
+                                                                        [3]   Soroush Nasiriany, Abhiram Maddukuri, Lance Zhang,
+                                                                              Adeet Parikh, Aaron Lo, Abhishek Joshi, Ajay Mandlekar,
+                                                                              and Yuke Zhu. Robocasa: Large-scale simulation of
+                                                                              everyday tasks for generalist robots. arXiv preprint
+                                                                              arXiv:2406.02523, 2024.
+                                                                        [4]   Yuke Zhu, Josiah Wong, Ajay Mandlekar, Roberto Martı́n-
+                                                                              Martı́n, Abhishek Joshi, Kevin Lin, Abhiram Maddukuri,
+                                                                              Soroush Nasiriany, and Yifeng Zhu. robosuite: A modular
+                                                                              simulation framework and benchmark for robot learning,
+                                                                              2025. URL https://arxiv.org/abs/2009.12293.
+Fig. 9: Sim-to-real transfer of policies trained in OOPSIEVERSE.        [5]   Emanuel Todorov, Tom Erez, and Yuval Tassa. Mujoco:
+We evaluate baseline IL policy (without health feedback) with the             A physics engine for model-based control. In 2012
+IL policy with health-filtered episodes on Panda robot. The baseline
+IL policy often performs unsafe behaviors like spilling water on
+                                                                              IEEE/RSJ international conference on intelligent robots
+the laptop or pushing a fragile bottle over the shelf. Whereas the            and systems, pages 5026–5033. IEEE, 2012.
+damage-aware filtered-episode IL policy learns safer behaviors. The     [6]   Ian M Mitchell, Alexandre M Bayen, and Claire J
+damage-aware IL policy results in a 60 % safer execution as compared          Tomlin. A time-dependent hamilton-jacobi formulation
+to the baseline IL policy. This shows that OOPSIEVERSE can enable             of reachable sets for continuous dynamic games. IEEE
+transferring safer policies to the real world.
+                                                                              Transactions on automatic control, 50(7):947–957, 2005.
+                                                                        [7]   Claire Tomlin, George J Pappas, and Shankar Sastry.
+first, our damage evaluation models are approximations of                     Conflict resolution for air traffic management: A study
+the underlying physical processes (e.g., mechanical fracture,                 in multiagent hybrid systems. IEEE Transactions on
+burning effects, liquid dynamics) and therefore, the computed                 automatic control, 43(4):509–521, 2002.
+damage may differ from the accurate one. However, through our           [8]   Aaron D Ames, Xiangru Xu, Jessy W Grizzle, and
+evaluation we indicated that the approximations are sufficient to             Paulo Tabuada. Control barrier function based quadratic
+represent with enough fidelity the real world damage sources.                 programs for safety critical systems. IEEE Transactions
+Moreover, while many of the values can be inferred from                       on Automatic Control, 62(8):3861–3876, 2016.
+the material properties of the objects, the computation of              [9]   Aaron D Ames, Samuel Coogan, Magnus Egerstedt,
+damage requires a manual annotation from the users to define                  Gennaro Notomista, Koushil Sreenath, and Paulo Tabuada.
+per link/object parameters. We believe this process can be                    Control barrier functions: Theory and applications. In
+greatly automated making use of the common sense knowledge                    2019 18th European control conference (ECC), pages
+in LLMs and VLMs. Even with these limitations, we hope                        3420–3431. Ieee, 2019.
+OOPSIEVERSE to facilitate research and development of safer            [10]   Franco Blanchini. Set invariance in control. Automatica,
+robotic solutions.                                                            35(11):1747–1767, 1999.
+                                                                       [11]   Felix Berkenkamp, Matteo Turchetta, Angela Schoellig,
+                     ACKNOWLEDGMENTS                                          and Andreas Krause. Safe model-based reinforcement
+  This work is in part supported by the UT-CNS Catalyst Grant                 learning with stability guarantees. Advances in neural
+and Toyota Research Institute - Young Faculty Researcher                      information processing systems, 30, 2017.
+Program.                                                               [12]   Gal Dalal, Daniel Gilboa, Shie Mannor, and Andreas
+                                                                              Schumann. Safe exploration in continuous action spaces.
+                          R EFERENCES                                         In International Conference on Machine Learning (ICML),
+ [1] Chengshu Li, Ruohan Zhang, Josiah Wong, Cem Gokmen,                      2018.
+     Sanjana Srivastava, Roberto Martı́n-Martı́n, Chen Wang,           [13]   Brijen Thananjeyan, Ashwin Balakrishna, Suraj Nair, et al.
+     Gabrael Levine, Wensi Ai, Benjamin Martinez, Hang Yin,                   Recovery rl: Safe reinforcement learning with learned
+     Michael Lingelbach, Minjune Hwang, Ayano Hiranaka,                       recovery zones. Robotics: Science and Systems (RSS),
+     2021.                                                             10.1007/s10994-025-06825-x.
+[14] Lukas Brunke, Yanni Zhang, Ralf Römer, Jack Naimer,         [26] Tristan Tomilin, Meng Fang, and Mykola Pechenizkiy.
+     Nikola Staykov, Siqi Zhou, and Angela P. Schoellig.               Hasard: A benchmark for vision-based safe reinforce-
+     Semantically safe robot manipulation: From semantic               ment learning in embodied agents. In The Thirteenth
+     scene understanding to motion safeguards, 2025. URL               International Conference on Learning Representations,
+     https://arxiv.org/abs/2410.15185.                                 2025.
+[15] Minheng Ni, Lei Zhang, Zihan Chen, Kaixin Bai,               [27] Leslie Pack Kaelbling, Michael L. Littman, and An-
+     Zhaopeng Chen, Jianwei Zhang, Lei Zhang, and Wang-                thony R. Cassandra. Planning and acting in partially
+     meng Zuo. Don’t let your robot be harmful: Responsible            observable stochastic domains. Artif. Intell., 101:99–
+     robotic manipulation via safety-as-policy, 2025. URL              134, 1998. URL https://api.semanticscholar.org/CorpusID:
+     https://arxiv.org/abs/2411.18289.                                 5613003.
+[16] Arpit Bahety, Arnav Balaji, Ben Abbatematteo, and            [28] Thomas Arnold, Daniel Kasenberg, and Matthias Scheutz.
+     Roberto Martı́n-Martı́n. Safemimic: Towards safe and              Value alignment or misalignment-what will keep systems
+     autonomous human-to-robot imitation for mobile manip-             accountable? In AAAI Workshops, pages 81–88, 2017.
+     ulation, 2025. URL https://arxiv.org/abs/2506.15847.         [29] T. L. Anderson. Fracture Mechanics: Fundamentals and
+[17] Kensuke Nakamura, Lasse Peters, and Andrea Bajcsy.                Applications. CRC Press, Boca Raton, FL, 4 edition, 2017.
+     Generalizing safety beyond collision-avoidance via latent-        ISBN 978-1-4987-2813-3. doi: 10.1201/9781315370293.
+     space reachability analysis. In Robotics: Science and        [30] Kenneth Langstreth Johnson. Contact mechanics. Cam-
+     Systems XXI, RSS2025. Robotics: Science and Systems               bridge university press, 1987.
+     Foundation, 2025. doi: 10.15607/rss.2025.xxi.113. URL        [31] William D Callister Jr and David G Rethwisch. Materials
+     http://dx.doi.org/10.15607/RSS.2025.XXI.113.                      science and engineering: an introduction. John wiley &
+[18] Javier Garcia and Fernando Fernández. A comprehensive            sons, 2020.
+     survey on safe reinforcement learning. Journal of Machine    [32] Yaron Lipman, Ricky T. Q. Chen, Heli Ben-Hamu, Maxi-
+     Learning Research, 16:1437–1480, 2015.                            milian Nickel, and Matt Le. Flow matching for generative
+[19] Alex Ray, Joshua Achiam, and Dario Amodei. Bench-                 modeling, 2023. URL https://arxiv.org/abs/2210.02747.
+     marking safe exploration in deep reinforcement learning.     [33] Andrew Wagenmaker, Mitsuhiko Nakamoto, Yunchu
+     arXiv preprint arXiv:1910.01708, 7(1):2, 2019.                    Zhang, Seohong Park, Waleed Yagoub, Anusha Naga-
+[20] Jiaming Ji, Borong Zhang, Jiayi Zhou, Xuehai Pan,                 bandi, Abhishek Gupta, and Sergey Levine. Steering your
+     Weidong Huang, Ruiyang Sun, Yiran Geng, Yifan Zhong,              diffusion policy with latent space reinforcement learning,
+     Josef Dai, and Yaodong Yang. Safety gymnasium: A                  2025. URL https://arxiv.org/abs/2506.15799.
+     unified safe reinforcement learning benchmark. Advances      [34] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec
+     in Neural Information Processing Systems, 36:18964–               Radford, and Oleg Klimov. Proximal policy optimization
+     18993, 2023.                                                      algorithms. arXiv preprint arXiv:1707.06347, 2017.
+[21] Zhaocong Yuan, Adam W Hall, Siqi Zhou, Lukas Brunke,         [35] NVIDIA, Nikita Cherniadev Johan Bjorck andFernando
+     Melissa Greeff, Jacopo Panerati, and Angela P Schoellig.          Castañeda, Xingye Da, Runyu Ding, Linxi ”Jim” Fan,
+     Safe-control-gym: A unified benchmark suite for safe              Yu Fang, Dieter Fox, Fengyuan Hu, Spencer Huang,
+     learning-based control and reinforcement learning in              Joel Jang, Zhenyu Jiang, Jan Kautz, Kaushil Kundalia,
+     robotics. IEEE Robotics and Automation Letters, 7(4):             Lawrence Lao, Zhiqi Li, Zongyu Lin, Kevin Lin, Guilin
+     11142–11149, 2022.                                                Liu, Edith Llontop, Loic Magne, Ajay Mandlekar, Avnish
+[22] Weiye Zhao, Yifan Sun, Feihan Li, Rui Chen, Ruixuan               Narayan, Soroush Nasiriany, Scott Reed, You Liang Tan,
+     Liu, Tianhao Wei, and Changliu Liu. Guard: A safe                 Guanzhi Wang, Zu Wang, Jing Wang, Qi Wang, Jiannan
+     reinforcement learning benchmark. Transactions on                 Xiang, Yuqi Xie, Yinzhen Xu, Zhenjia Xu, Seonghyeon
+     Machine Learning Research, 2023.                                  Ye, Zhiding Yu, Ao Zhang, Hao Zhang, Yizhou Zhao,
+[23] Jan Leike, Miljan Martic, Victoria Krakovna, Pedro A.             Ruijie Zheng, and Yuke Zhu. GR00T N1: An open
+     Ortega, Tom Everitt, Andrew Lefrancq, Laurent Orseau,             foundation model for generalist humanoid robots. In
+     and Shane Legg. Ai safety gridworlds, 2017. URL                   ArXiv Preprint, March 2025.
+     https://arxiv.org/abs/1711.09883.                            [36] Kevin Black, Noah Brown, Danny Driess, Adnan Esmail,
+[24] Zuxin Liu, Zijian Guo, Haohong Lin, Yihang Yao,                   Michael Equi, Chelsea Finn, Niccolo Fusai, Lachy Groom,
+     Jiacheng Zhu, Zhepeng Cen, Hanjiang Hu, Wenhao Yu,                Karol Hausman, Brian Ichter, Szymon Jakubczak, Tim
+     Tingnan Zhang, Jie Tan, and Ding Zhao. Datasets and               Jones, Liyiming Ke, Sergey Levine, Adrian Li-Bell,
+     benchmarks for offline safe reinforcement learning, 2023.         Mohith Mothukuri, Suraj Nair, Karl Pertsch, Lucy Xi-
+     URL https://arxiv.org/abs/2306.09303.                             aoyang Shi, James Tanner, Quan Vuong, Anna Walling,
+[25] Geng Yiran, Jiaming Ji, Yuanpei Chen, Geng Haoran,                Haohuan Wang, and Ury Zhilinsky. π0 : A vision-language-
+     Fangwei Zhong, and Yaodong Yang. Redman: reli-                    action flow model for general robot control, 2026. URL
+     able dexterous manipulation with safe reinforcement               https://arxiv.org/abs/2410.24164.
+     learning. Machine Learning, 114, 07 2025. doi:               [37] Kevin Black, Noah Brown, Danny Driess, Adnan Esmail,
+     Michael Equi, Chelsea Finn, Niccolo Fusai, Lachy Groom,
+     Karol Hausman, Brian Ichter, et al. π0 : A vision-language-
+     action flow model for general robot control. arXiv preprint
+     arXiv:2410.24164, 2024.
+[38] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec
+     Radford, and Oleg Klimov. Proximal policy optimization
+     algorithms, 2017. URL https://arxiv.org/abs/1707.06347.
+                           A PPENDIX                                 RoboCasa includes longer-horizon kitchen activities that chain
+          A. C ONSTRAINED MDP F ORMULATION                           multiple interactions and increase the opportunity for errors.
+                                                                     While each task highlights a primary damage modality, many
+   In the main text, we formulate DAMAGESIM as a Damage-             are designed with overlapping hazards; for instance, the place
+Aware POMDP to provide maximum flexibility in how health             bowl in sink task requires the agent to simultaneously mitigate
+and damage signals are utilized, whether as part of the              mechanical risks, such as high-impact drops, and fluid risks,
+observation space, for reward shaping, or as termination             such as water on the robot’s end-effector.
+conditions. However, many established works in Safe RL                  Importantly, OOPSIEBENCH is meant to be extensible. The
+[24, 25, 19, 20] adopt a Constrained Markov Decision                 task definitions are modular and the safety instrumentation
+Process (CMDP) formulation. To ensure compatibility with             provided by DAMAGESIM is environment-agnostic: users can
+these methods, we show here how our framework naturally              add new scenes or task specifications and obtain the same
+maps to a CMDP. In this formulation, the agent’s objective           health/damage signals, provided that damage tracking is enabled
+is to maximize the task-specific reward while keeping the            for the relevant objects. Additionally, DAMAGESIM is natively
+cumulative physical damage below a predefined safety budget.         compatible with existing task definitions from the BEHAVIOR-
+   Our tasks can be formally represented by the CMDP tuple           1k and RoboCasa benchmarks, including 1,000 tasks from
+(S DA , A, T , R, C, ĉ, γ), where S DA = S × S h is the health-     BEHAVIOR-1K and 360 from RoboCasa. When object-specific
+augmented state space, A is the action space, T (s′ | s, a) is       parameters are available (either from our provided settings or
+the transition function including the health update rule defined     user-specified edits), DAMAGESIM can be applied to these
+in Section III, and γ ∈ [0, 1) is the discount factor.               additional tasks and environments with minimal configuration
+   In this context, the task-specific reward function R(s, a) cor-   changes.
+responds to Rtask , rewarding purely functional achievements
+such as goal proximity or object placement. The damage cost                 C. OOPSIEVERSE FOR I MITATION L EARNING
+function C(s, a) is defined by the total damage signal produced
+by our suite of Damage Evaluation Models (DEMs) at each                 This section details the imitation learning setup, comprising
+time step t:                                                         the dataset collection process, the flow matching policy
+                    C(st , at ) =
+                                  X
+                                      dDEMk (t)                (1)   architecture, and the training hyperparameters.
+                                 k
+                                                                     A. Demonstration Data Collection
+The parameter ĉ represents the damage budget, specifying the
+maximum allowable cumulative health loss an agent or any                For each task in Section V-A, we collected human demon-
+object may incur over the course of an episode.                      strations under two distinct conditions. In the “with health
+                                                                     feedback” condition, operators utilized the DAMAGESIM in-
+  Under the CMDP framework, the objective is to find a policy
+                                                                     terface, which overlays real-time health bars on the video
+π that maximizes the expected task reward while ensuring the
+                                                                     feed to visualize the objects’ health (see Fig. 6 and Section
+expected damage does not exceed the budget ĉ:
+        "∞                 #          "∞                #            V-A). In the “w/o health feedback” condition, operators viewed
+          X
+               t
+                                       X
+                                            t
+                                                                     standard video frames without health indicators. We collected
+ max Eπ      γ R(st , at )    s.t. Eπ      γ C(st , at ) ≤ ĉ        a balanced dataset containing an equal number of episodes for
+  π
+           t=0                            t=0
+                                                              (2)    both conditions; detailed statistics are provided in Table C.2.
+
+                 B. TASKS IN OOPSIEBENCH                             B. Model Architecture
+   Table B.1 enumerates the task suite used in OOPSIEBENCH,              For all the models trained in Section V-A, we use the
+grouped by simulator backend (Tasks that are present in OG           Conditional Flow model [32] based on a transformer backbone
+and RoboCasa, RoboCasa only, and OG only). Beyond the                similar to the π0 action expert [37].
+high-level overview in Sec. IV, the table summarizes per-task          Observation and action spaces. The policy’s observation
+information that is useful when selecting tasks for training         space consists of visual and proprioceptive inputs. The visual
+or evaluation, including the number of damageable objects            input consists of six 128 × 128 segmentation images from three
+tracked in the scene, and the expected failure cases.                camera viewpoints (one wrist-mounted, two external). We only
+   Across these tasks, we intentionally span a range of common       provide segmentation to task objects (refer to Table. C.2). To
+household hazards and unsafe shortcuts. For example, several         mitigate partial observability, we stack the last 2 frames for
+short-horizon manipulation tasks (e.g., placing fragile dishware     each camera. The proprioceptive input is a 23-dimensional
+or shelving a cereal box) admit fast strategies that complete        vector encoding the manipulator’s joint positions, velocities,
+the goal but cause catastrophic damage, while safer strategies       end-effector pose, and the gripper position. The policy predicts
+require gentler contacts or more careful strategies. Other tasks     an action chunk of horizon T = 8. Each step in the chunk is a
+are designed to stress hazards that are naturally supported by a     7-dimensional vector containing the desired delta-translation (3
+given simulator: OmniGibson tasks include explicit liquid and        dims), delta-rotation (3 dims), and gripper command (1 dim).
+thermal risks (e.g., pouring water near electronics, interacting     All action outputs are normalized to [0, 1] during training and
+with running water, operating near a burning fireplace), while       denormalized for inference.
+                                                      TABLE B.1: OOPSIEBENCH Tasks
+
+  Task                                 Task Type                              Anticipated Damage Type/s                          # Damage-
+                                                                                                                                 able Objects
+  BEHAVIOR-1K and Robocasa
+  Place Plate              free-space pick-and-place                          impact damages to plate                            2
+  Pick Egg                 delicate object grasping                           crushing damage to egg                             2
+  Shelve Cereal box        contact-assisted placement                         impact damage to delicate objects                  6
+  Wipe Counter             sustained surface interaction                      compression damage to robot                        1
+  Open Single Door         articulated object actuation                       constraint violation damage to door/robot          2
+  Place in Microwave       constrained-space insertion                        compression/shear damage to food/robot             2
+  Open/Close Drawer        articulated object actuation                       constraint violation damage to drawer/robot        2
+  Navigate and Pick        contact-rich nav                                   impact damage to delicate objects or compression   2
+                                                                              damage to robot
+  Turn on Stove                        articulated object actuation           constraint violation damage to stove knob/robot    2
+  Turn on Faucet                       articulated object actuation           constraint violation damage to stove knob/robot    2
+  Robocasa only
+  Serve Pastry                         delicate object grasping + transport   crushing/impact damage to pastry                   3
+  Prepare Breakfast                    dynamic object transport               impact damage when objects spill from tray         3
+  Dishes to Sink                       fragile object pick and place          impact damages to fragile objects                  3
+  Prepare Coffee                       constrained-space insertion            compression damages to robot                       3
+  Turn on Microwave                    button actuation                       compression damage to microwave/robot              2
+  BEHAVIOR-1K only
+  Pour Water (in cup)                  fluid-aware manipulation               fluid-induced damage to laptop                     2
+  Fill Bowl
+  (with faucet running)                fluid-aware manipulation               fluid-induced damage to gripper                    1
+  Add Firewood (to a lit fire-         fire-aware manipulation                thermal damage to robot                            1
+  place)
+  Attach Camera (to a tripod)          fragile object insertion               impact damage to camera                            2
+  Pick up Scrub                        precise picking                        compression damage to robot                        2
+  Ignite wood                          fire-aware manipulation                thermal damage to robot                            1
+
+
+         TABLE C.2: Task objects and dataset statistics.                                   TABLE C.3: IL Hyperparameters
+                                                         Total Episodes           Hyperparameter                    Value
+ Task               Task Objects
+                                                      (w/ + w/o Feedback)
+                                                                                  Architecture
+                    Box of crackers, Flour bag,                                   Feature dimension D               512
+ S HELVE I TEM      Bottle of wine, Bottle of beer,   90 (45 + 45)                Transformer layers L              4
+                    Wineglass                                                     Attention heads                   8
+                                                                                  FFN expansion factor              4
+ P ICK E GG         Egg                               90 (45 + 45)                Attention dropout                 0.1
+ A DD F IREWOOD     Log, Fireplace, Robot             60 (30 + 30)                FFN dropout                       0.2
+                                                                                  Segmentation embedding dim        32
+                    Laptop, Coffee cup,                                           Segmentation image size           128 × 128
+ P OUR WATER                                          60 (30 + 30)
+                    Robot, Water glass                                            Frame stack F                     2
+                    Counter, Sponge,                                              Action chunk size H               8
+ W IPE C OUNTER                                       60 (30 + 30)                Action dimension                  7 (6 for P OUR WATER)
+                    Dirt, Robot
+                                                                                  Proprioceptive state dimension    23
+                                                                                  Flow Matching
+                                                                                  Training timestep sampler         Beta(1.5, 1.0)
+   Segmetation and proprioception state encoder. The                              Flow-matching inference steps K
+                                                                                                    16
+segmentation encoder converts integer-valued instance seg-             Training
+mentation masks into dense feature vectors. It is shared               Optimizer                    AdamW
+across all camera views and frame-stacked observations. Each           Learning rate                3 × 10−4
+                                                                       Weight decay                 1 × 10−3
+segmentation image is a 128 × 128 map of integer class                 Batch size                   64
+IDs. The encoder first maps each pixel’s class ID to a 32-             Gradient clipping (max norm) 5.0
+dimensional dense vector through a learned embedding table.
+This converts the discrete segmentation mask into a continuous
+tensor of shape 128 × 128 × 32, which can be interpreted
+as a 32-channel image. This embedded representation is then (16 groups) and SiLU activations, with a skip connection that
+processed by a residual convolutional network consisting of applies a 1×1 projection convolution when the input and output
+four modules. Each module contains a residual block followed channel dimensions differ. The channel dimensions progress
+by a strided convolution that halves the spatial resolution. The as 32 → 64 → 128 → 256 → 256 across the four modules,
+residual blocks use two 3 × 3 convolutions with GroupNorm reducing the spatial dimensions from 128 × 128 down to 8 × 8.
+A final residual block with 256 channels is applied after the last                 TABLE D.4: DSRL PPO hyperparameters
+stage. The resulting 8 × 8 × 256 feature map is spatially pooled                       Hyperparameter                   Value
+using 4 × 4 average pooling, producing a 2 × 2 × 256 = 1024-
+                                                                                       Noise Policy Network
+dimensional vector. This vector is then projected to the model’s                       Architecture                     5-layer MLP
+feature dimension (512) through a two-layer MLP with a SiLU                            Hidden dimension                 1024
+activation in between. At each timestep t, we can obtain 3 × 2                         Activation                       SiLU
+                                       1     1        3       3                        Mean clamp range                 [−1, 1]
+segmentation feature vectors I = [It−1 , It , ..., It−1 , It ], where                  Std clamp range                  [0.1, 1.0]
+the superscript camera index. The most recent frame of the                             Noise sample clamp range         [−2, 2]
+23-dimensional proprioceptive state is encoded by a 3-layer                            Initial std                      0.5
+MLP, which produces a single 512-dimensional vector st .                               PPO
+    Action decoder. Following the architectural design of π0 ,                         Optimizer                        Adam
+                                                                                       Learning rate                    1 × 10−4
+we employ a Transformer backbone to parameterize the flow                              Clip ratio ϵ                     0.2
+matching velocity field. The model predicts the denoising                              PPO epochs per iteration         5
+velocity conditioned on the current noisy action, the observation,                     Minibatch size                   512
+                                                                                       Entropy coefficient β            0.0
+and the flow timestep τ .                                                              Gradient clipping (max norm)     1.0
+    The encoder output 7 observation tokens (comprising 6                              Total steps                      5.2 × 105
+segmentation embeddings It and 1 proprioceptive embedding                              GAE
+st ). We project the noisy action chunk at the flow matching                           Discount γ                       0.95
+step τ into 8 tokens, denoted as âτt:t+T ∈ R8×512 . The                               GAE λ                            0.95
+flow matching timestep τ is mapped to a high-dimensional                               Data Collection
+                                                                                       Replay buffer size               2048
+embedding τemb via a 2-layer MLP with SiLU activations.
+The full input sequence to the Transformer is formed by
+concatenating the observation context, the timestep embedding,
+and the noisy action tokens xin                            τ
+                                   t = [It , st , τemb , ât:t+T ]. This
+                                                                         and variance of the initial noise a0 , replacing the standard
+input sequence xin is processed by a stack of 4 transformer Gaussian prior N (0, I).
+layers, each consisting of multi-head self-attention (8 heads,              To minimize computational overhead and preserve the
+64 dimensions per head) followed by a feed-forward network learned feature representations for the base policy, we leverage
+that expands the feature dimension from 512 to 2048 with the frozen encoder from the imitation learning policy described
+a GELU activation before projecting back to 512. Both in Section C.2. The DSRL policy is conditioned on these
+sublayers use post-norm residual connections with LayerNorm. embeddings and outputs the distributional parameters (mean
+                                                                                                                           0
+To generate the flow matching update, we extract the last 8 and variance) for the steered initial noise at . Crucially, freezing
+tokens corresponding to the action chunk from the Transformer            the encoders   prevents     the RL  optimization    from degrading the
+output. These tokens are passed through a final linear projection        visual and  proprioceptive     features essential  for  the base policy’s
+                                                     τ        8×7        performance.     For   this  experiment,   we   specifically   target the
+layer to produce the predicted velocity field v̂t ∈ R .
+    Inference We generate action chunks by integrating the               baseline policy    trained   without  health feedback.    As  this  policy
+learned flow using a fixed-step Euler solver with K = 16 steps,          exhibited  the  highest    likelihood  for unsafe    behavior,   it serves
+initialized from a standard Gaussian prior a0t ∼ N (0, I).               as the ideal candidate to evaluate the efficacy of damage-aware
+                                                                         steering. The hyperparameters for the PPO training phase are
+C. Training and Evaluation                                               detailed in Table D.4.
+    Table C.3 lists the specific hyperparameters used for training          For the S HELVE I TEM task, we define the task completion
+and inference. To evaluate performance, we conduct 30 episodes as one where the cereal box is fully contained within the shelf
+per model. In each episode, we introduce random perturbations boundaries and the gripper has released the object. We use
+to the initial poses and scales of the scene objects to assess a sparse task reward, assigning a +1 reward only upon task
+the policy’s robustness to scene variations.                             completion, otherwise 0. To incentivize safety, we incorporate
+                                                                         a penalty term derived from the the damage computed by
+      D. OOPSIEVERSE FOR R EINFORCEMENT L EARNING
+                                                                         DAMAGESIM. This damage signal is normalized across the
+A. Diffusion Steering (DSRL) for S HELVE I TEM                           all task objects to the range [−1, 0], ensuring the penalty
+    We investigate whether the damage signals provided by magnitude is the same with the sparse task reward. During
+OOPSIEVERSE can be leveraged to steer a pre-trained flow training, the base policy receives a latent from the DSRL
+matching policy towards safer behaviors. To achieve this, we policy and generates a full action chunk a1t:t+T . This chunk is
+employ the Diffusion Steering (DSRL) framework [33].                     executed completely before computing the next latent, enabling
+    Unlike standard fine-tuning approaches that update the entire faster training by avoiding flow matching policy inference at
+diffusion backbone, DSRL optimizes a learned initial noise every simulator step.
+distribution to select specific noise (latents) that maximize               Fig. E.1 shows the training curves for the task completion
+returns. In our setup, we train a policy πlatent (a0t |xin    t ) using  reward Rtask (green) and the damage d caused by the policy
+Proximal Policy Optimization (PPO) [38] to output the mean (yellow). We observe that with steering, the task completion
+TABLE D.5: BC + PPO hyperparameters for M OVE G LASS                         TABLE D.6: PPO hyperparameters for P LACE P LATE
+OF WATER
+                                                                               Hyperparameter                  Value
+  Hyperparameter                  Value                                        Observation / Action Spaces
+  Policy / Value Networks                                                      Observation space               6D ([EEF pos; plate pos])
+  Architecture (actor & critic)   4-layer MLP                                  Action space                    4D ([∆x, ∆y, ∆z, gripper])
+  Hidden dimensions               256–1024–1024–256                            Policy / Value Networks
+  Activation                      Tanh                                         Policy distribution             Gaussian + Tanh squashing
+  Action distribution             Gaussian + Tanh squashing                    Actor architecture              2-layer MLP (512, 512)
+  Initial log-std                 −0.5                                         Critic architecture             2-layer MLP (512, 512)
+  Observation                     EEF pose + mug pose (14D)                    Activation                      Tanh
+  Action                          EEF position delta (3D); gripper held        Initial log-std (arm dims)      −0.5
+                                  closed                                       Initial log-std (gripper dim)   −1.5
+  Behavior Cloning (BC)                                                        PPO
+  Offline dataset                 50 teleop demos (25 safe, 25 unsafe)         Optimizer                       Adam
+  BC epochs                       20                                           Learning rate                   1 × 10−3 (annealed)
+  BC objective                    Maximize log-likelihood of demo ac-          Total steps                     1.0 × 105
+                                  tions                                        Rollout length                  512
+  PPO Finetuning                                                               Update epochs per iteration     10
+  Optimizer                       Adam                                         Minibatches per update          8
+  Learning rate                   1 × 10−3 (annealed)                          Clip ratio ϵ                    0.2
+  Total steps                     3.0 × 104                                    Entropy coefficient β           0.0
+  Rollout length                  512                                          Value loss coefficient          0.5
+  Update epochs per iteration     8                                            Gradient clipping (max norm)    0.5
+  Minibatches per update          4 (minibatch size 128)                       Target KL                       0.01
+  Clip ratio ϵ                    0.1                                          Discount γ                      0.99
+  Entropy coefficient β           0.0                                          GAE λ                           0.95
+  Value loss coefficient          0.7
+  Gradient clipping (max norm)    0.5
+  Target KL                       0.01
+  Discount γ                      0.99                                    terminal penalty). The overall scalar reward at each step is
+  GAE λ                           0.95                                    the sum of the task-distance reward and the damage-derived
+                                                                          reward (with unit weights in our implementation). All PPO
+                                                                          and BC hyperparameters are summarized in Table D.5.
+reward remains stable at levels comparable to the initial base
+policy, while damage consistently decreases. This demonstrates
+                                                                          C. RL from Scratch for P LACE P LATE
+that DAMAGESIM provides effective damage and health signals
+for steering the flow matching policy toward safer behaviors.                In P LACE P LATE, the robot begins holding a plate above
+                                                                          the counter and must place it onto the target region. We train
+B. Finetuning a BC-Gaussian Policy for M OVE G LASS OF                    a continuous-control policy from scratch using PPO under two
+WATER                                                                     reward settings: (i) a task-only objective and (ii) a combined
+   We evaluate whether DAMAGESIM’s damage signals can                     task-and-damage objective.
+be used to improve safety in a continuous-control setting                    Our task reward is a dense signal given by the negative
+with liquids and electrical hazards. For the M OVE G LASS                 distance to the goal position, with a large positive success
+OF WATER task, we begin with a Gaussian policy trained via                bonus (similar to the M OVE GLASS OF WATER task). For the
+behavior cloning (BC) on a teleoperation dataset containing               damage-aware setting, we add the same damage-derived penalty
+50 demonstrations (25 safe and 25 unsafe trajectories). The               term used in the other RL experiments (see Sec. V-B). We set
+BC policy achieves a task completion rate of 100%, but only               the damage weight to w=2 for this task.
+20% safe success, motivating RL finetuning to reduce damage                  Training with task reward alone produces an unsafe strategy
+while maintaining task competence.                                        that drops the plate to reduce distance quickly. In contrast,
+   We finetune the BC-initialized policy using Proximal Policy            incorporating the damage penalty discourages damaging in-
+Optimization (PPO) [38] for 30,000 environment steps. The                 teractions, leading to gentler placements that preserve plate
+policy observes a state consisting of the robot end-effector pose         health. Training hyperparameters are provided in Table D.6.
+and the mug pose (14D total), and outputs only end-effector
+position deltas (3D).                                                                 E. A DDITIONAL VLA EXPERIMENTS
+   Rewards combine a task-progress term with a safety penalty
+derived from DAMAGESIM (see Sec. V-B). Concretely, the task                 We evaluated pi0 (off-the-shelf, no fine-tuning) [36] on
+reward is the negative distance to a fixed goal position on the           the 4 RoboCasa VLA tasks (as mentioned in Table I and
+target surface, with a large terminal bonus on success. A rollout         observed a 17.5% completion rate, 0% safe completion rate
+terminates either when the mug reaches the goal (yielding a               as compared to 73%, 18% respectively for Gr00t. pi0 did not
++300 success reward) or when accumulated damage causes any                perform any meaningful behavior on the B1K tasks since it
+tracked entity’s health to reach zero (yielding a large negative          wasn’t post-trained on them.
+                                               Shelve Cereal Box                                                     Move glass of water
+                      0.8                                                                   0.8
+                                                                                                               Damage d
+                      0.7                                                                                      Rtask
+                                                                                            0.7
+                      0.6
+                                                                                            0.6
+                      0.5
+
+                      0.4                                                                   0.5
+
+                      0.3
+                                                                                            0.4
+                      0.2
+                                                                                            0.3
+                      0.1           Damage d
+                                    Rtask
+                                                                                            0.2
+                            0.0         0.1      0.2 0.3 0.4            0.5                        0.1            0.2      0.3       0.4
+                                               Timesteps (×106)                                                     Timesteps (×106)
+                                              Place Plate - Task Reward Only                     Place Plate - Task and Damage Reward
+
+                            1.0                                                      1.0
+
+                            0.8                                                      0.8
+
+                            0.6                                                      0.6             Damage d
+                                                                                                     Rtask
+                            0.4                                                      0.4
+
+                            0.2                                                      0.2
+                                              Damage d
+                                              Rtask
+                            0.0                                                      0.0
+                                  0.0     0.5      1.0 1.5 2.0 2.5             3.0         0.0           0.5      1.0      1.5        2.0
+                                                   Timesteps (×106)                                            Timesteps (×106)
+Fig. E.1: Reinforcement Learning with OOPSIEVERSE. We use DAMAGESIM’s damage and health signal for RL training for S HELVE I TEM
+with DSRL, and M OVE GLASS OF WATER and P LACE PLATE with PPO. We plot task return (green) and damage (yellow) to decouple task
+performance from safety metrics, demonstrating that policies trained with DAMAGESIM can maintain high task success while progressively
+reducing the damage. (top row:) S HELVE I TEM with DSRL (left) and M OVE GLASS OF WATER with PPO (right). (bottom row:) P LACE
+PLATE trained with PPO using task reward only (left) and task reward with the damage penalty enabled (right), illustrating that without
+damage feedback the policy attains the goal but incurs substantially higher damage. For visualization, the curves are smoothed using a moving
+average with a window of the last 10 episode returns for S HELVE I TEM (top left) and the last 60 episode returns for the other three plots.
+
+
+              F. S ETTING O BJECT PARAMETERS                      pose, scale). We provide parameter settings for all objects
+                                                                  used in our tasks and experiments, but the configuration is
+   DAMAGESIM models mechanical, thermal, and fluid damage intentionally editable: users can easily make objects more or
+using the object-specific parameters introduced in Section III. less fragile based on the behaviors they wish to model.
+Because real objects exhibit diverse failure behaviors that          Damage tracking can be enabled for any subset of objects in
+depend on properties such as material, geometry, etc., there is the scene. For articulated objects, users may optionally restrict
+no single set of parameters that accurately captures all objects. tracking to a subset of rigid parts (“links”) and can further
+Instead, DAMAGESIM exposes these parameters to the user and provide link-specific overrides. This level of specification is
+treats them as part of the environment specification.             not required for typical use (the default is to track all links
+   DAMAGESIM parameters are set through the same configura- with shared parameters), but it is useful when different parts
+tion file (or dictionary) used to construct the environment. Each of an object exhibit different behaviors (e.g., the different parts
+object’s damage parameters are specified alongside standard of a Tiago robot), and a user wishes to model them.
+per-object attributes already present in simulator configs (e.g.,    Crucially, specifying parameters for new objects does not
+require strong domain expertise. The objective is to establish a
+physically grounded proxy for unsafe interactions rather than
+perfectly modeling every material property. As such, users can
+utilize our provided benchmark objects as starting points for
+objects with similar properties and perform minimal iterative
+tuning to achieve effective results.
+   Tables F.7, F.8, and F.9 list the per-object parameter values
+used in our experiments for the mechanical, thermal, and fluid
+evaluators, respectively.
+     Object                      α         β       Emech      Λmech
+     default                    1.0       1.0       30.0       0.1
+     agent (robot)             0.01       1.0       70.0       0.2
+     microwave                  1.0       1.0      100.0       1.0
+     camera_tripod              0.1       1.0      150.0       1.0
+     digital_camera             1.0       0.5       60.0      100.0
+     scrub_brush               0.01      0.01      300.0      100.0
+     bottle_of_wine             1.0       0.5       50.0      100.0
+     wineglass                  1.0       0.5       15.0      100.0
+     bottle_of_beer             1.0       0.5       15.0      100.0
+     bag_of_flour               0.1       0.1      150.0      100.0
+     box_of_crackers            0.1       0.8      200.0       1.0
+     stand                    0.001      0.001     500.0        1.0
+     laptop                     1.0       0.5       80.0      100.0
+     water_glass                1.0       0.5       50.0      100.0
+     coffee_cup                 1.0       0.5      150.0       1.0
+     plate                      1.0       0.5       50.0       10.0
+     vase                       1.0       0.5       30.0       10.0
+     pedestal_table             0.1       0.1      150.0       1.0
+     swivel_chair               0.1       0.1      500.0       1.0
+
+TABLE F.7: Mechanical damage parameters per object. Sym-
+bols match Sec. III: εmech = αF∥ + βF⊥ and dmech =
+Λmech max(εmech − Emech , 0).
+
+           Object                 Thot     Tcold     Λtherm
+           agent (robot)          40.0     -20.0      1.0
+           camera_tripod          50.0     -30.0      0.1
+           digital_camera         50.0     -30.0      0.1
+           laptop                 50.0     -20.0      0.1
+           vase                   60.0     -40.0     0.01
+           pedestal_table         60.0     -40.0     0.01
+           swivel_chair           60.0     -60.0     0.01
+
+TABLE F.8: Thermal damage parameters per object. Sym-
+bols match Sec. III: dtherm (t) = Λtherm max(T − Thot , 0) +
+Λtherm max(Tcold − T, 0) (our code uses a single scale Λtherm
+applied symmetrically).
+
+               Object                 Cfluid     Λfluid
+               agent (robot)          10.0       10.0
+               digital_camera         20.0        5.0
+               laptop                 20.0        5.0
+
+TABLE F.9: Liquid-exposure parameters per object. Symbols
+match Sec. III: damage begins once exposure exceeds Cfluid
+and then accumulates as dfluid (t) = Λfluid max(C(t) − Cfluid , 0).
+

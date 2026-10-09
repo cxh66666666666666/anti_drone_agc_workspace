@@ -1,0 +1,32 @@
+scenario_id: truly_blocked
+locked: true
+note: "N3 确实无路：目标被四道墙围住，地面车无法进入 -> PLAN_UNREACHABLE"
+car_start: [-4.0, -3.0, 0.11, 0.0]
+target_start: [3.6, 1.6, 2.0, 0.0]
+drone_start: [0.0, 0.0, 0.0]
+target_motion:
+  mode: static
+  speed_mps: 0.0
+  waypoints: [[3.6, 1.6], [2.6, 1.6]]
+obstacles:
+  - {name: pole_1, pose: [2.5, 0.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+  - {name: pole_2, pose: [4.5, 1.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+  - {name: box_top, pose: [3.6, 2.9, 1.5, 0.0, 0.0, 0.0], size: [3.0, 0.3, 3.0]}
+  - {name: box_bottom, pose: [3.6, 0.3, 1.5, 0.0, 0.0, 0.0], size: [3.0, 0.3, 3.0]}
+  - {name: box_left, pose: [2.1, 1.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 3.0, 3.0]}
+  - {name: box_right, pose: [5.1, 1.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 3.0, 3.0]}
+map:
+  resolution_m: 0.5
+  size_x_m: 40.0
+  size_y_m: 40.0
+  origin_x: -20.0
+  origin_y: -20.0
+  unknown_is_obstacle: true
+thresholds:
+  approach_radius_m: 3.0
+  hold_window_s: 5.0
+  confidence_min: 0.5
+  search_timeout_s: 60.0
+  approach_timeout_s: 60.0
+  mission_timeout_s: 120.0
+  target_lost_tolerance_s: 2.0

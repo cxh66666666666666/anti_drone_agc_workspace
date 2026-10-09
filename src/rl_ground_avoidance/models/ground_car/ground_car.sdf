@@ -1,0 +1,68 @@
+<?xml version="1.0" ?>
+<!--
+  地面车模型（运动学方案）：单连杆车体。
+  运动由 ground_env 以运动学积分 + set_model_state 传送控制；
+  Gazebo 物理只负责可视化与碰撞体存在，不做驱动。
+  视觉使用 PX4 r1_rover 轮式无人车（UGV）网格，仅替换 visual：
+  collision / inertial / 模型名 / 连杆名保持不变。
+-->
+<sdf version="1.6">
+  <model name="ground_car">
+    <static>false</static>
+    <link name="base_link">
+      <inertial>
+        <mass>2.0</mass>
+        <inertia><ixx>0.025</ixx><iyy>0.025</iyy><izz>0.04</izz></inertia>
+      </inertial>
+      <pose>0 0 0.11 0 0 0</pose>
+      <collision name="body_collision">
+        <geometry><box><size>0.44 0.34 0.16</size></box></geometry>
+      </collision>
+
+      <!-- 视觉：PX4 r1_rover 网格（model://r1_rover，位于 mavlink_sitl_gazebo/models）。
+           rover 前向为 +x（与车运动方向一致，无需旋转）；整体约 0.458(长)×0.432(宽)×0.223(高) m，
+           按 0.90 缩放贴合碰撞盒 0.44×0.34×0.16；各部件位姿 = rover 局部位姿×0.90，
+           再整体下移 0.0283，使车轮接地面与本体系碰撞盒底面 z=-0.08 一致。 -->
+      <visual name="chassis"><pose>0 0 -0.0283 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/chassis_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="top"><pose>0 0 0.0748 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/top_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/White</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="battery"><pose>-0.0837 -0.0001 0.0748 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/battery_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="housing"><pose>0.0313 0 0.0748 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/housing_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="antenna_l"><pose>-0.1409 0.0686 0.0748 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/antenna_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="antenna_r"><pose>-0.1409 -0.0686 0.0748 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/antenna_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="wheel_lb"><pose>-0.135 0.1469 -0.0089 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/wheel_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="wheel_lf"><pose>0.135 0.1469 -0.0089 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/wheel_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="wheel_rb"><pose>-0.135 -0.1469 -0.0089 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/wheel_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+      <visual name="wheel_rf"><pose>0.135 -0.1469 -0.0089 0 0 0</pose>
+        <geometry><mesh><uri>model://r1_rover/meshes/wheel_link.STL</uri><scale>0.90 0.90 0.90</scale></mesh></geometry>
+        <material><script><name>Gazebo/FlatBlack</name><uri>file://media/materials/scripts/gazebo.material</uri></script></material>
+      </visual>
+    </link>
+  </model>
+</sdf>

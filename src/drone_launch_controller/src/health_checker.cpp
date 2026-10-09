@@ -12,12 +12,12 @@ namespace drone_launch_controller {
  * @brief 无人机健康检查器类构造函数
  * @param nh ROS节点句柄
  */
-HealthChecker::HealthChecker(ros::NodeHandle& nh) : nh_(nh) 
+HealthChecker::HealthChecker(ros::NodeHandle& nh) 
 {
-    battery_sub_ = nh_.subscribe("/mavros/battery", 10, &HealthChecker::batteryCallback, this);
-    gps_sub_ = nh_.subscribe("/mavros/global_position/global", 10, &HealthChecker::gpsCallback, this);
-    imu_sub_ = nh_.subscribe("/mavros/imu/data", 10, &HealthChecker::imuCallback, this);
-    esc_sub_ = nh_.subscribe("/mavros/esc_status", 10, &HealthChecker::escCallback, this);
+    battery_sub_ = nh.subscribe("/mavros/battery", 10, &HealthChecker::batteryCallback, this);
+    gps_sub_ = nh.subscribe("/mavros/global_position/global", 10, &HealthChecker::gpsCallback, this);
+    imu_sub_ = nh.subscribe("/mavros/imu/data", 10, &HealthChecker::imuCallback, this);
+    esc_sub_ = nh.subscribe("/mavros/esc_status", 10, &HealthChecker::escCallback, this);
 
     battery_ok_ = false;
     gps_ok_ = false;
@@ -81,14 +81,15 @@ float HealthChecker::getBatteryPercentage()
 
 /**
  * @brief 检查电池状态
- * @details 检查电池电压和百分比是否在正常范围内，默认阈值为3.3V和20%。
+ * @details 电压只做数据有效性检查（缺少电芯数量信息，无法设定合理的包电压阈值），
+ *          低电量判据由电池百分比给出，默认阈值为 20%。
  * @return true 如果电池状态正常，否则返回 false
  */
 bool HealthChecker::checkBattery() 
 {
-    if (battery_state_.voltage < 3.3f) 
+    if (battery_state_.voltage <= 0.0f) 
     {
-        ROS_ERROR("[HealthChecker] 电池电压过低: %.2fV (阈值: 3.3V)", battery_state_.voltage);
+        ROS_ERROR("[HealthChecker] 电池电压无数据: %.2fV", battery_state_.voltage);
         battery_ok_ = false;
         return false;
     }
@@ -179,7 +180,9 @@ bool HealthChecker::checkESCs()
     {
         if (esc.voltage <= 0.0f) 
         {
-            ROS_WARN("[HealthChecker] ESC电压过低: %.2fV", esc.voltage);
+            ROS_ERROR("[HealthChecker] ESC电压异常: %.2fV", esc.voltage);
+            esc_ok_ = false;
+            return false;
         }
     }
 
@@ -219,8 +222,6 @@ DroneHealthStatus HealthChecker::performFullCheck()
     status.battery_percentage = getBatteryPercentage();
     status.gps_status = gps_ok_;
     status.imu_status = imu_ok_;
-    status.barometer_status = false;
-    status.magnetometer_status = false;
     status.esc_status = esc_ok_;
 
     if (status.error_code == 0) 

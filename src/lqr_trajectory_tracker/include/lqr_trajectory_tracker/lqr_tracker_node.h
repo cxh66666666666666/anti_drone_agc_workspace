@@ -10,10 +10,12 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/PoseStamped.h>
+#include <geometry_msgs/TwistStamped.h>
 #include <geometry_msgs/Vector3Stamped.h>
 #include <visualization_msgs/Marker.h>
 #include <mavros_msgs/State.h>
 #include <std_srvs/Trigger.h>
+#include <nav_msgs/Path.h>
 
 #include "lqr_trajectory_tracker/lqr_controller.h"
 #include "lqr_trajectory_tracker/trajectory_generator.h"
@@ -53,6 +55,11 @@ private:
     void poseCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
 
     /**
+     * @brief 回调函数：处理 MAVROS 实际速度（ENU）
+     */
+    void velocityCallback(const geometry_msgs::TwistStamped::ConstPtr& msg);
+
+    /**
      * @brief 回调函数：处理无人机状态订阅消息
      */
     void stateCallback(const mavros_msgs::State::ConstPtr& msg);
@@ -61,9 +68,31 @@ private:
      * @brief 回调函数：处理强化学习局部避障偏移量
      */
     void localOffsetCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg);
+    void localControlCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg);
+
+    /**
+     * @brief 回调函数：接收 A* 全局路径航点（waypoints 轨迹类型）
+     */
+    void waypointsCallback(const nav_msgs::Path::ConstPtr& msg);
+
+    /**
+     * @brief 回调函数：接收可选跟随参考（/agc/air/follow_ref，N2）
+     */
+    void followRefCallback(const geometry_msgs::PoseStamped::ConstPtr& msg);
 
     bool resetTrajectoryCallback(std_srvs::Trigger::Request& req,
                                  std_srvs::Trigger::Response& res);
+
+    /**
+     * @brief 回调函数：重载轨迹（换场景时重新读取几何参数并生成轨迹）
+     */
+    bool reloadTrajectoryCallback(std_srvs::Trigger::Request& req,
+                                  std_srvs::Trigger::Response& res);
+
+    /**
+     * @brief 将跟踪相位、RL 偏移与误差统计复位到 t=0（reset/reload 共用）
+     */
+    void resetTrackingState();
 
     /**
      * @brief 发布函数：发布轨迹可视化数据
@@ -114,9 +143,14 @@ private:
     ros::NodeHandle pnh_;
 
     ros::Subscriber pose_sub_;
+    ros::Subscriber velocity_sub_;
     ros::Subscriber state_sub_;
     ros::Subscriber local_offset_sub_;
+    ros::Subscriber local_control_sub_;
+    ros::Subscriber waypoints_sub_;
+    ros::Subscriber follow_ref_sub_;
     ros::ServiceServer reset_trajectory_service_;
+    ros::ServiceServer reload_trajectory_service_;
 
     // 发布者：发送控制指令和可视化数据
     ros::Publisher pos_pub_;
@@ -124,6 +158,8 @@ private:
     ros::Publisher ref_path_pub_;
     ros::Publisher adjusted_ref_pub_;
     ros::Publisher reference_velocity_pub_;
+    ros::Publisher reference_mid_lookahead_velocity_pub_;
+    ros::Publisher reference_lookahead_velocity_pub_;
     ros::Publisher flown_path_pub_;
     ros::Publisher pos_error_pub_;
     ros::Publisher vel_error_pub_;
@@ -146,9 +182,15 @@ private:
     Eigen::Vector3d rl_offset_;
     bool has_rl_offset_;
     ros::Time last_rl_offset_time_;  // 最后收到偏移消息的时间戳，用于超时清零
+    ros::Time last_rl_control_time_;
+    ros::Time last_control_loop_time_;
+    double rl_commanded_speed_scale_;
+    bool rl_pause_progress_;
+    double rl_phase_direction_;
     double rl_speed_scale_;   // 障碍物检测时的速度缩放系数（0~1）
     double rl_velocity_gain_; // 避障偏移量转为速度分量的增益（Hz）
     double max_rl_velocity_;  // RL 偏移产生的速度前馈上限 [m/s]
+    double position_lead_time_;  // 位置设定点前馈提前时间 [s]
 
     // 飞行轨迹可视化
     visualization_msgs::Marker flown_path_marker_;
@@ -156,6 +198,7 @@ private:
     // 轨迹参数
     std::string trajectory_type_;
     double trajectory_duration_;
+    bool loop_trajectory_;
     double control_rate_;
     double dt_;
 
@@ -169,8 +212,6 @@ private:
     // 跟踪误差统计
     std::vector<double> position_errors_;
     std::vector<double> velocity_errors_;
-    double max_position_error_;
-    double mean_position_error_;
 
     // 轨迹形状参数
     Eigen::Vector3d start_point_;
@@ -180,11 +221,24 @@ private:
     double height_;
     double angular_velocity_;
 
-    // 固定水平8字形轨迹参数
+    // 历史固定水平跑道形轨迹参数
     FixedHorizontalParams fixed_horizontal_params_;
+    FigureEightParams figure_eight_params_;
 
     // 悬停轨迹位置
     Eigen::Vector3d step_position_;
+
+    // 航点轨迹参数与数据
+    std::vector<Eigen::Vector3d> waypoints_;
+    double waypoint_speed_;
+    double avoidance_lookahead_time_;
+
+    // N2 可选跟随参考（/agc/air/follow_ref）；仅在 follow_enabled 时覆盖基础参考
+    bool follow_enabled_;
+    double follow_timeout_s_;
+    Eigen::Vector3d follow_ref_;
+    ros::Time last_follow_time_;
+    bool has_follow_ref_;
 };
 
 }

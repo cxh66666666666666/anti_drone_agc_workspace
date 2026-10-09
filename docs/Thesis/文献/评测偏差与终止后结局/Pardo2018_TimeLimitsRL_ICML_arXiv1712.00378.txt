@@ -1,0 +1,674 @@
+                                                                         Time Limits in Reinforcement Learning
+
+
+                                                                   Fabio Pardo 1 Arash Tavakoli 1 Vitaly Levdik 1 Petar Kormushev 1
+
+
+                                                                  Abstract                                 in the environment which in turn provides a representa-
+                                              In reinforcement learning, it is common to let an            tion St+1 of the successor state and a reward signal Rt+1 .
+                                              agent interact for a fixed amount of time with its           An individual reward received by the agent does not directly
+                                                                                                           indicate the quality of its latest action as some rewards may
+arXiv:1712.00378v4 [cs.LG] 27 Jan 2022
+
+
+
+
+                                              environment before resetting it and repeating the
+                                              process in a series of episodes. The task that the           be the consequence of a series of actions taken in the past.
+                                              agent has to learn can either be to maximize its             Thus, the goal of the agent is to maximize the discounted
+                                              performance over (i) that fixed period, or (ii) an           sum of future rewards, also known as the return:
+                                              indefinite period where time limits are only used                                                     ∞
+                                                                                                                                                    X
+                                              during training to diversify experience. In this              Gt = Rt+1 +γRt+2 +γ 2 Rt+3 +... =             γ k−1 Rt+k (1)
+                                              paper, we provide a formal account for how time                                                       k=1
+                                              limits could effectively be handled in each of the
+                                              two cases and explain why not doing so can cause             A discount factor 0 ≤ γ < 1 is necessary to exponentially
+                                              state aliasing and invalidation of experience re-            decay the future rewards ensuring bounded returns. While
+                                              play, leading to suboptimal policies and training            the series is infinite, it is common to use this expression
+                                              instability. In case (i), we argue that the termi-           even in the case of possible terminations, such as timeouts,
+                                              nations due to time limits are in fact part of the           by considering them to be the entering of an absorbing
+                                              environment, and thus a notion of the remaining              state that transitions only to itself and generates zero re-
+                                              time should be included as part of the agent’s in-           wards thereafter. However, when the maximum length of an
+                                              put to avoid violation of the Markov property. In            episode is fixed, it is easier to rewrite the expression above
+                                              case (ii), the time limits are not part of the envi-         by explicitly including the time limit T :
+                                              ronment and are only used to facilitate learning.                                                    T −t
+                                              We argue that this insight should be incorporated
+                                                                                                                                                   X
+                                                                                                             Gt:T = Rt+1 + ... + γ T −t−1 RT =            γ k−1 Rt+k (2)
+                                              by bootstrapping from the value of the state at                                                      k=1
+                                              the end of each partial episode. For both cases,
+                                              we illustrate empirically the significance of our            Optimizing for the expectation of the return specified in
+                                              considerations in improving the performance and              Equation 2 is suitable for naturally time-limited tasks where
+                                              stability of existing reinforcement learning algo-           the agent has to maximize its expected return only over
+                                              rithms, showing state-of-the-art results on several          a fixed episode length. In this case, since the return is
+                                              control tasks.                                               bounded, a discount factor of γ = 1 can be used. However,
+                                                                                                           in practice it is still common to keep γ smaller than 1 in
+                                                                                                           order to give more priority to short-term rewards. Under
+                                         1. Introduction                                                   this optimality model, the objective of the agent does not go
+                                                                                                           beyond the time limit. Therefore, such an agent could for
+                                         The reinforcement learning framework (Kaelbling et al.,           example learn to take more risky actions leading to higher
+                                         1996; Sutton & Barto, 1998; Szepesvari, 2010) considers a         expected returns as approaching the time limit. In Section 2,
+                                         sequential interaction between an agent and its environment.      we study this case and illustrate that due to the time limit
+                                         At every time step t, the agent receives a representation St of   terminations, the remaining time is an inherent part of the
+                                         the environment’s state, selects an action At that is executed    environment’s state and is essential to its Markov property
+                                             1
+                                               Robot Intelligence Lab, Imperial College London, UK.        (Sutton & Barto, 1998). Therefore, we argue for the inclu-
+                                         Correspondence to: Fabio Pardo, Arash Tavakoli, Vitaly Levdik,    sion of a notion of the remaining time in the agent’s input,
+                                         Petar Kormushev <f.pardo, a.tavakoli, v.levdik, p.kormushev       an approach that we refer to as time-awareness (TA). We
+                                         @imperial.ac.uk>.                                                 describe various scenarios where lacking a notion of the re-
+                                         Proceedings of the 35 th International Conference on Machine      maining time can lead to suboptimal policies and instability,
+                                         Learning, Stockholm, Sweden, PMLR 80, 2018. Copyright 2018        and demonstrate significant performance improvements for
+                                         by the author(s).                                                 agents with time-awareness.
+                                                Time Limits in Reinforcement Learning
+
+                          50
+
+
+
+
+     20
+
+          (a) Gridworld                       (b) Standard                    (c) Time-awareness          (d) Partial-episode bootstrapping
+
+Figure 1. Color-coded state-values and policies learned by tabular Q-learning on our Two-Goal Gridworld task with T = 3 and −1
+penalties for movements. (a) The gridworld and its two goals. (b) The standard agent perceives timeout terminations as environmental
+ones and is not time-aware. It always tries to go for the closest goal even if the remaining time is not sufficient. (c) The time-aware agent
+maximizes its return over the finite horizon and learns to stay in place when there is not enough time to reach a goal. (d) The agent with
+partial-episode bootstrapping maximizes its return over an indefinite horizon, it learns to go for the most rewarding goal.
+
+
+On the other hand, optimizing for the expectation of the                 producibility, we used the same 10 seeds (0, 1000, ..., 9000)
+return specified by Equation 1 is relevant for time-unlimited            to initialize the pseudo-random number generators for the
+tasks where the interaction is not limited in time by nature.            agents and environments.
+In this case, the agent has to maximize its expected return
+                                                                        We empirically show that time-awareness significantly im-
+over an indefinite period, possibly infinite. However, it can
+                                                                        proves the performance of PPO for the time-limited tasks
+be desirable to still use time limits in order to diversify
+                                                                        and can sometimes result in interesting behaviors. For ex-
+the agent’s experience. For example, starting from highly
+                                                                        ample, in the Hopper-v1 domain, our agent learns to effi-
+diverse states can avoid converging to suboptimal policies
+                                                                        ciently jump forward and fall towards the end of its time
+that are limited to a fraction of the state space. In Section 3,
+                                                                        in order to maximize its travelled distance, performing a
+we show that in order to learn good policies that continue
+                                                                        “photo finish”. For the time-unlimited tasks, we show that
+beyond the time limit, it is important to differentiate between
+                                                                        bootstrapping at the end of partial episodes allows to sig-
+the terminations that are due to time limits and those from
+                                                                        nificantly outperform the standard PPO. In particular, on
+the environment. Specifically, for bootstrapping methods,
+                                                                        Hopper-v1, even if trained with episodes of only 200 steps,
+we argue to bootstrap at states where termination is due to
+                                                                        the agent with partial-episode bootstrapping manages to
+time limits, or more generally any other causes than the
+                                                                        learn to hop for at least 106 time steps (two hours). Finally,
+environmental ones. We refer to this approach as partial-
+                                                                        we demonstrate that the negative impact of large experi-
+episode bootstrapping (PEB) and demonstrate that it can
+                                                                        ence replay buffers shown by Zhang & Sutton (2017) can
+significantly improve the performance of agents.
+                                                                        often be vastly reduced if timeout terminations are prop-
+We evaluate the impact of these considerations on a range               erly handled. The source code and videos can be found at:
+of novel and popular benchmark domains using tabular Q-                 sites.google.com/view/time-limits-in-rl.
+learning and Proximal Policy Optimization (PPO), a modern
+                                                                        While the importance of time-awareness for optimizing a
+deep reinforcement learning (Arulkumaran et al., 2017; Hen-
+                                                                        time-limited objective (finite horizon) is well-established
+derson et al., 2017) algorithm which has recently been used
+                                                                        in the dynamic programming and optimal control literature
+to achieve state-of-the-art performance in many domains
+                                                                        (Bertsekas, 1995; Bertsekas & Tsitsiklis, 1996) (e.g. model-
+(Schulman et al., 2017; Heess et al., 2017). We use the
+                                                                        based backward induction), we observed that it has been
+OpenAI Baselines (Hesse et al., 2017) implementation of
+                                                                        largely overlooked in the reinforcement learning literature
+PPO with the hyperparameters reported by Schulman et al.
+                                                                        and in the design of the popular benchmarks. In the view
+(2017), unless stated otherwise. The time-aware version of
+                                                                        of the above, this paper may serve as an introduction to
+PPO concatenates the observations provided by the environ-
+                                                                        this concept, and as the first attempt to bring it to bear on
+ment and the remaining time represented by a scalar (nor-
+                                                                        the problems and practices of reinforcement learning. The
+malized from −1 to 1). The partial-episode bootstrapping
+                                                                        main contributions of this paper are: the thorough analysis
+version of PPO makes a distinction between environment
+                                                                        of the specific issues which can be caused by the lack of
+resets and terminations by using the value of the last state
+                                                                        time-awareness and the study of the impact of the discount
+in the evaluation of the advantages if no termination is en-
+                                                                        factor in time-limited tasks, the formalization of the partial-
+countered. All novel tasks are implemented using OpenAI
+                                                                        episode bootstrapping method, and the extensive empirical
+Gym (Brockman et al., 2016) and the standard benchmarks
+                                                                        evaluations demonstrating improved performance and sta-
+are from the MuJoCo (Todorov et al., 2012) Gym collec-
+                                                                        bility of two existing reinforcement learning algorithms.
+tion. For each task involving PPO, to achieve perfect re-
+                                           Time Limits in Reinforcement Learning
+
+2. Time-awareness for time-limited tasks                         By denoting an estimate of the state-value function by v̂π ,
+                                                                 the target y for a one-step temporal-difference (TD) update
+In tasks that are time-limited by nature, the learning objec-    (Sutton, 1988), after transitioning to a state s0 and receiving
+tive is to optimize the expectation of the return Gt:T from      a reward r, is:
+Equation 2. Interactions are systematically terminated at a             (
+predetermined time step T if no environmental termination                r                              at all terminations
+occurs earlier. This time-wise termination can be seen as         y=                                                         (4)
+                                                                         r + γv̂π (s0 , T − t − 1)      otherwise
+transitioning to a terminal state whenever the time limit is
+reached. The states of the agent’s environment, formally         A time-unaware agent, deprived of the remaining time in-
+a Markov decision process (MDP) (Puterman, 2014), thus           formation, would learn value functions with or without
+contain a notion of the remaining time used by its transition    bootstrapping from the estimated value of s0 depending
+function. This time-dependent MDP can be thought of as           on whether the time limit is reached. These conflicting up-
+a stack of T time-independent MDPs followed by one that          dates for estimating the value of the same state result in an
+only transitions to a terminal state. Thus, at each time step    inaccurate average. It is worth noting that, for time-aware
+t ∈ {0, ..., T − 1}, actions result in transitioning to a next   agents, if the time limit is never varied, the inclusion of the
+state in the next MDP in the stack.                              elapsed time t would be sufficient. This could then be mea-
+                                                                 sured by the agent itself from the beginning of the current
+In effect, a time-unaware agent has to act in a partially
+                                                                 episode. For more generality, however, we chose to always
+observable Markov decision process (POMDP) (Lovejoy,
+                                                                 represent the remaining time.
+1991) where states that only differ by their remaining time
+appear identical. This phenomenon is a form of state alias-
+                                                                 2.1. The Last Moment problem
+ing (Whitehead & Ballard, 1991) that is known to lead to
+suboptimal policies and instability due to the infeasibility     To give a simple example of            stay              stay
+of correct credit assignment. In this case, the terminations     the learning of an optimal time-             0        –1
+due to time limits can only be interpreted as part of the        dependent policy, we consider an                  1
+environment’s stochasticity where the time-unaware agent         MDP containing two states A and          A                 B
+                                                                                                                jump
+perceives a chance of transitioning to a terminal state from     B. The agent always starts in state
+any given state. In fact, this perceived stochasticity depends   A and has the possibility to choose an action to “stay” in
+on the agent’s current behavioral policy. For example, an        place with no rewards or a “jump” action that transitions it
+agent could choose to stay in a fixed initial state during       to state B with a reward of 1. However, state B is a trap with
+the entire course of an episode and perceive the probability     no exit where the only possible action provides a penalty of
+of termination from that state to be 1/T , whereas it could      −1. The episodes terminate after a fixed number of steps
+choose to always move away from it in which case this            T . The goal of the game is thus to jump just before the
+probability would be perceived as zero.                          timeout. For a time-unaware agent and T > 1, the task is
+In the view of the above, we consider time-awareness for         impossible to master. The optimal stochastic strategy being
+reinforcement learning agents in time-limited domains by         to jump 50% of the time when T = 2 and to never jump
+including directly the remaining time T − t in the agent’s       when T > 2. In contrast, a time-aware agent can learn to
+representation of the environment’s state or by providing a      stay in place for T − 1 steps and then jump.
+way to infer it. The importance of the inclusion of a notion
+of time in time-limited problems was first demonstrated in       2.2. The Two-Goal Gridworld problem
+the reinforcement learning literature by Harada (1997), yet      To further illustrate the impact of state aliasing for time-
+seems to have been largely overlooked. A major difference        unaware agents, we consider a deterministic gridworld envi-
+between the approach of Harada (1997) (i.e. the QT -learning     ronment (see Figure 1a) with two possible goals rewarding
+algorithm) and that described in this paper, however, is that    50 for reaching the top-right and 20 for the bottom-left cells.
+we consider a more general class of time-dependent MDPs          The agent has 5 actions: to move in cardinal directions or to
+where the reward distribution and the transitions can also       stay in place. Any movement incurs a penalty of −1 while
+be time-dependent, preventing the possibility to consider        staying in place generates no reward. Episodes terminate
+multiple time instances at once.                                 after 3 time steps or if the agent has reached a goal. The
+Here, we illustrate the issues faced by time-unaware agents      initial state is randomly selected for every episode, exclud-
+via exemplifying the case for value-based methods. The           ing goals. We used tabular Q-learning (Watkins & Dayan,
+state-value function at time t for a time-aware agent in an      1992) with random actions, trained until convergence with a
+environment with time limit T is:                                decaying learning rate and a discount factor of 0.99.
+                                                                 The time-aware agent has a state-action value table for each
+            vπ (s, T − t) = Eπ [Gt:T | St = s]            (3)    time step and easily learns the optimal policy which is to
+                                            Time Limits in Reinforcement Learning
+
+go for the closest goal when there is enough time, and                                 0                        0
+
+
+
+
+                                                                      episode steps
+to stay in place otherwise. For the time-unaware agent,                                3                        1
+
+
+
+
+                                                                                                        seeds
+the greedy values of the cells adjacent to the top-right and                           6                        2
+bottom-left goals converge to 49 and 19, respectively. Then,                           9                        3
+since T = 3, from each remaining cell, the agent has                                  14                        4
+between 1 and 3 steps. If it moves it receives a penalty
+                                                                                           time-aware               time-unaware
+and for 2/3 of the times bootstraps from the successor
+cell. Thus, for v(s) = maxa q(s, a) and N (s) denoting            Figure 2. Heat map of the learned “dangerous” action probabilities
+the neighbors of s, for states nonadjacent to the goals we        overlaid on our Queue of Cars problem (0 and 1 denote black and
+have: v(s) = 2/3(−1 + γ maxs0 ∈N (s) v(s0 )) + 1/3(−1).           white respectively). The 9 non-terminal states are represented from
+This learned value function leads to a policy that always tries   left to right. The time-aware PPO agent learns to optimally choose
+to go for the closest goal even if there is not enough time.      actions with decreasing remaining time, while standard PPO learns
+While the final optimal policy does not actually require time     various suboptimal strategies depending on the initialization seeds.
+information, this example clearly shows that the confusion
+during training due to state aliasing can create a leakage of
+the values to states that are out of reach. It is worth noting
+that, Monte Carlo methods such as REINFORCE (Williams,            ments use time limits which are perceived as environmental
+1992; Sutton et al., 2000) are not susceptible to this leakage    terminations. The results in Figure 3 demonstrate that time-
+as they use complete returns instead of bootstrapping. How-       awareness (TA) significantly improves the performance and
+ever, without awareness of the remaining time, Monte Carlo        stability of PPO. To better understand the differences be-
+methods would still not be able to learn an optimal policy        tween the agents we now provide several more observations.
+in many cases, such as the Last Moment problem.                   As illustrated in Figure 3a, for a discount rate of 0.99, often,
+                                                                  the standard PPO is initially on par with the time-aware PPO
+2.3. The Queue of Cars problem                                    and later starts to plateau (e.g. Walker2d-v1 and Humanoid-
+An interesting                                                    v1). This is due to the fact that, in some domains, the agents
+property of time-                                                 start to experience terminations due to the time limit more
+aware agents is                                                   frequently as they become better, at which point the time-
+the ability to dy-                                                unaware agent begins to perceive inconsistent returns for
+namically adapt                                                   seemingly similar states. The advantage of time-awareness
+to the remaining time. To illustrate this, we introduce an        becomes even clearer in the case of a discount rate of 1
+environment which we call Queue of Cars where the agent           where the time-unaware PPO often diverges drastically (see
+controls a vehicle that is held up behind an intermittently       Figure 3b). This is mainly because, in this case, the time-
+moving queue of cars. The agent’s goal is to reach an exit        unaware agent experiences much more significant conflicts
+located 9 slots away from its starting position. At any time,     as returns are now the sum of the undiscounted rewards.
+the agent can choose the “safe” action to stay in the queue       Figure 4 shows the learned state-value estimations for
+which may result in advancing to the next slot with 50%           InvertedPendulum-v1 which perfectly illustrate the differ-
+probability, or to attempt to overtake with the “dangerous”       ence between a time-aware agent and a time-unaware one
+action which has 80% probability to advance but poses             in terms of their estimated expected returns. While time-
+a 10% chance of collision with the oncoming traffic and           awareness enables PPO to learn an accurate exponential
+terminating the episode. The agent only receives a reward         or linear decay of the expected return with time, the time-
+of 1 when it reaches the terminal destination.                    unaware one only learns a constant estimate.
+Time-unaware agents cannot possibly adapt to the remain-          Time-awareness does not only help agents by avoiding the
+ing time and thus can only learn a fixed combination of           conflicting updates. In fact, in naturally time-limited tasks
+dangerous and safe actions based on the position. Figure 2        where the agents have to maximize their performance for a
+shows that a time-aware PPO agent can optimally adapt to          limited time, time-aware agents can demonstrate interesting
+the remaining time and its distance to the goal.                  ways of achieving this objective. Figure 5 shows the average
+                                                                  final pose of the time-aware (top) and time-unaware (bot-
+2.4. Standard control tasks                                       tom) agents. We can see that the time-aware agent robustly
+                                                                  learns to jump towards the end of its time in order to maxi-
+In this section, we compare the performance of PPO with
+                                                                  mize its expected return, resulting in a “photo finish”. It is
+and without the remaining time as part of the agent’s input
+                                                                  also interesting to notice that for γ = 1, the time-unaware
+on 9 continuous control tasks from OpenAI Gym (Brockman
+                                                                  PPO (bottom-right) learns to actively stay in place to at least
+et al., 2016; Duan et al., 2016). By default, these environ-
+                                                                  accumulate the rewards for staying alive.
+                                                       Time Limits in Reinforcement Learning
+
+                 Ant                        HalfCheetah                         Hopper                          Humanoid               InvertedDoublePendulum
+                                                                                                                                     10000
+6000                             3000                            4000                                6000
+                                                                                                                                      7500
+4000                             2000                                                                4000
+                                                                                                                                      5000
+                                                                 2000
+                                 1000
+2000                                                                                                 2000                             2500
+                                    0
+   0                                                                0                                   0                                0
+       0               3 × 106          0              2 × 106          0                  2 × 106          0              5 × 106           0              4 × 105
+
+           InvertedPendulum                  Reacher                            Swimmer                         Walker2d
+                                    0                                                                6000
+1000
+                                                                  200
+                                 −20                                                                                                             TA-PPO 10 workers
+                                                                                                     4000
+                                                                                                                                                 TA-PPO
+ 500                             −40                                                                                                             PPO 10 workers
+                                                                  100
+                                                                                                     2000                                        PPO
+                                 −60
+   0                                                                0                                   0
+       0               1 × 105          0              2 × 105          0                  1 × 106          0              2 × 106
+
+                                                                            (a) γ = 0.99
+                 Ant                        HalfCheetah                         Hopper                          Humanoid               InvertedDoublePendulum
+                                                                                                                                     10000
+6000                             3000                            4000                                6000
+                                                                                                                                      7500
+4000                             2000                                                                4000
+                                                                                                                                      5000
+                                                                 2000
+                                 1000
+2000                                                                                                 2000                             2500
+                                    0
+   0                                                                0                                   0                                0
+       0               3 × 106          0              2 × 106          0                  2 × 106          0              5 × 106           0              4 × 105
+
+           InvertedPendulum                  Reacher                            Swimmer                         Walker2d
+                                    0                                                                6000
+1000
+                                                                  200
+                                 −20                                                                                                             TA-PPO 10 workers
+                                                                                                     4000
+                                                                                                                                                 TA-PPO
+ 500                             −40                                                                                                             PPO 10 workers
+                                                                  100
+                                                                                                     2000                                        PPO
+                                 −60
+   0                                                                0                                   0
+       0               1 × 105          0              2 × 105          0                  1 × 106          0              2 × 106
+
+                                                                             (b) γ = 1
+
+Figure 3. Performance comparison of PPO with and without the remaining time in input on several continuous control tasks from OpenAI
+Gym (T = 1000 for all except T = 50 for Reacher-v1). The averaged sum of rewards and standard errors are shown with respect to the
+number of training steps. On multiple tasks, the proposed time-aware PPO (TA-PPO) outperforms the standard PPO, especially for the
+case with a large discount factor.
+
+
+In this section, we explored the scenario where the aim is                          3. Partial-episode bootstrapping for
+to learn a policy that maximizes the expected return over a                            time-unlimited tasks
+limited time. We argued for the inclusion of a notion of the
+remaining time as part of the agent’s observation to avoid                          In tasks that are not time-limited by nature, the learning ob-
+state aliasing which can cause suboptimal policies and in-                          jective is to optimize the expectation of the return Gt from
+stability. However, this scenario is not always ideal as there                      Equation 1. While the agent has to maximize its expected
+are cases where, even though the agent experiences time                             return over an indefinite (possibly infinite) period, it is de-
+limits in its interaction with the environment, the objective                       sirable to still use time limits in order to frequently reset the
+is to learn a policy for a time-unlimited task. For instance,                       environment and increase the diversity of the agent’s experi-
+as we saw for Hopper-v1, the learned policy that maximizes                          ences. A common mistake, however, is to then consider the
+the return over 300 steps generally results in a photo finish                       terminations due to such time limits as environmental ones.
+which would lead to a fall and subsequent termination if                            This is equivalent to optimizing for returns Gt:T (Equa-
+the simulation was to be extended. Such a policy is not vi-                         tion 2), not accounting for the possible future rewards that
+able if the goal is to learn to move forward for an indefinite                      could have been experienced if no time limits were used.
+period. While one solution could be to not use time limits                          In the case of bootstrapping methods, we argue for contin-
+during training, short episodes remain useful to diversify                          uing to bootstrap at states where termination is due to the
+experiences. In the next section, we therefore explore how                          time limit. The state-value function of a policy at time t can
+time-unlimited tasks can be solved with partial episodes.
+                                                                     Time Limits in Reinforcement Learning
+
+                                   100                                                  1000
+                                   60
+
+
+
+
+                                                                                               values
+                                           values
+                                                                                       500
+                                   20                                                                                                                     TA-PPO
+                                   1.0                                                 1.0            s
+                                               ps                                                 tep
+   0                         0.5           ste         0                         0.5
+                                                                                                 es
+        50
+           0           0.0               me
+                                       ti 6                 50
+                                                               0           0.0                im
+episod          00
+                   0
+                                    ing 10          episod          00
+                                                                       0
+                                                                                       i n g t 06
+      e time 1                   i n     ×                e time 1                  in         ×1
+             steps           tra                                 steps           tra
+
+                                                                                                                                                          PPO
+
+
+Figure 4. Learned state-value estimations on InvertedPendulum-v1
+(T = 1000) of the time-aware (blue) and the standard (orange)
+PPO agents. The first one quickly learns a function that accurately
+takes into account the remaining time, while the second one slowly                                        Figure 5. Average last pose on Hopper-v1 (T = 300) with the
+learns an average.                                                                                        vertical termination threshold of 0.7 meters in red. The time-aware
+                                                                                                          agent (TA-PPO) learns to jump forward just before the time limit
+                                                                                                          in order to maximize its forward distance. The time-unaware
+                                                                                                          PPO agent does not learn this behavior and its training is highly
+be rewritten in terms of the time-limited return Gt:T and the                                             destabilized when the discount factor is large.
+value from the last state vπ (ST ):
+
+          vπ (s) = Eπ Gt:T + γ T −t vπ (ST ) | St = s
+                                                    
+                                                                                                (5)
+                                                                                                          3.1. The Two-Goals Gridworld problem
+By denoting an estimate of the state-value function by v̂π ,                                              We revisit the gridworld environment from Section 2.2.
+the target y for a one-step TD update, after transitioning to                                             While previously the agent’s task was to learn an optimal
+a state s0 and receiving a reward r, is:                                                                  policy for a given time limit, we now consider how an agent
+         (                                                                                                can learn a good policy for an indefinite period from partial-
+             r             at environmental terminations                                                  episode experiences. The same setup and tabular Q-learning
+  y=                                                      (6)
+                        0
+             r + γv̂π (s ) otherwise (including timeouts)                                                 from Section 2.2 were used, but instead of considering ter-
+                                                                                                          minations due to time limits as environmental ones, boot-
+                                                                                                          strapping is maintained from the non-terminal states that
+An agent without partial-episode bootstrapping would not
+                                                                                                          are reached at the time limits. This modification allows our
+bootstrap at timeout terminations. Similarly to Equation 4,
+                                                                                                          agent to learn the time-unlimited optimal policy of always
+the conflicting updates for estimating the value of the same
+                                                                                                          going for the most rewarding goal (see Figure 1d). On the
+state lead to an approximate average of these updates.
+                                                                                                          other hand, while the standard agent that is not performing
+In the previous section, one of the issues came from boot-                                                the final-step bootstrapping (see Figure 1b) has values from
+strapping values from states that were out-of-reach, letting                                              out-of-reach cells leaking into its learned value function,
+the agent falsely believe that more rewards were available                                                these updates do not occur in sufficient proportion to let the
+after. On the opposite, the problem presented here is when                                                agent learn the time-unlimited optimal policy.
+systematic bootstrapping is not performed from states at
+                                                                                                          For the next experiments, we again used PPO but with two
+the time limit and thus, forgetting that more rewards would
+                                                                                                          key modifications for partial-episode-bootstrapping. First,
+actually be available thereafter.
+                                                                                                          we removed the Gym’s TimeLimit wrapper that is included
+Related to the proposed partial-episode bootstrapping (PEB),                                              by default for all environments and which enforces termi-
+White (2017) introduces a way to consider episodic tasks                                                  nation when time limits are reached. Second, we modified
+as a continuing one with a variable discount factor be-                                                   the PPO’s implementation to enable continuing to bootstrap
+tween them. Our approach however differs in several ways:                                                 when the environment is reset but no termination is encoun-
+(1) PEB is more suitable for tasks that do not necessarily                                                tered. This involves changing the implementation of the
+have an underlying episodic structure such as Hopper-v1.                                                  generalized advantage estimator (GAE) (Schulman et al.,
+(2) In the proposed PEB approach, the agent does not experi-                                              2016). Whereas GAE uses an exponentially-weighted aver-
+ence a transition from the last state of a partial episode to the                                         age of n-step value estimations for bootstrapping which is
+first state of the next episode, thus enabling environmental                                              more complex than the one-step lookahead bootstrapping
+resets based on time limits during training. (3) PEB uses                                                 explained in Equation 6, continuing to bootstrap from the
+a constant discount factor, allowing the learning of correct                                              last non-terminal states is the only modification required for
+indefinite-horizon policies from partial episodes.                                                        the considered approach.
+                                              Time Limits in Reinforcement Learning
+
+             Hopper                           Walker2d                         InfiniteCubePusher
+                                  300                                 20
+                                                                                                                 PPO (T = 50)
+250
+                                                                                                                 PPO (T = 300)
+                                  200                                 10                                         PPO (T = 1000)
+200                                                                                                              PEB-PPO (T = 50)
+                                                                                                                 PEB-PPO (T = 300)
+                                  100                                  0
+150
+      0                3 × 106          0                3 × 106           0                3 × 106
+
+Figure 6. Performance comparison of PPO with and without partial-episode bootstrapping with γ = 0.99 on several continuous control
+tasks. The averaged scores and standard errors are shown with respect to the number of training steps. For Hopper-v1 and Walker2d-v1,
+the evaluation episodes are limited to 106 time steps and the discounted sum of rewards is represented, while for InfiniteCubePusher-v0
+the evaluations are limited to 1000 time steps and the number of targets reached per episode is represented.
+
+
+3.2. Hopper and Walker                                               Due to the absence of reward shaping (Ng et al., 1999), it is
+                                                                     necessary to limit training episodes in time to diversify the
+Here, we consider the Hopper-v1 and Walker2d-v1 environ-
+                                                                     experiences and learn to solve the task. Therefore, during
+ments from Section 2.4, but instead aim to learn a policy that
+                                                                     training, a time limit of 50 time steps was used, sufficient
+maximizes the agent’s expected return over a time-unlimited
+                                                                     to push the cube to one target in most cases. During evalua-
+horizon. The goal here is to show that by continuing to boot-
+                                                                     tion, however, 1000 steps were used to allow successfully
+strap from states at timeout terminations it is possible to
+                                                                     reaching several targets. An entropy coefficient of 0.01 was
+learn good policies for time-unlimited domains. Figure 6
+                                                                     used to encourage exploration. We found this value to yield
+(left and middle) demonstrates performance evaluations of
+                                                                     best performance for both agents. Figure 6 (right) shows
+the standard PPO against one with partial-episode bootstrap-
+                                                                     that our agent drastically outperforms the standard PPO.
+ping (PEB). During training, partial episodes were limited
+to 300 time steps, while during evaluation episodes were
+                                                                     3.4. Experience replay
+limited to 106 time steps to prevent infinitely long evalu-
+ation episodes. The standard PPO agent was also trained              Sampling batches of transitions from a buffer of past experi-
+with the default time limit (T = 1000) for comparison. The           ence, known as experience replay (Lin, 1992), has proved
+results show that partial-episode bootstrapping allows our           to be highly effective in stabilizing the training of artifi-
+agent to significantly outperform the standard PPO and that          cial neural networks by decorrelating updates and avoiding
+training on short interactions is sufficient.                        the rapid forgetting of rare experiences (Mnih et al., 2015;
+                                                                     Schaul et al., 2016). However, we argue that the perceived
+3.3. The Infinite Cube Pusher task                                   non-stationarity, induced by not properly handling time lim-
+                                                                     its, is incompatible with experience replay. Indeed, the
+To demonstrate the ability of
+                                                                     timeout-occurrence distribution changes with the behavior
+our agent in optimizing for
+                                                                     of the agent, and thus past transitions become obsolete.
+an infinite-horizon (no terminal
+state) objective, we propose a                                       While both time-awareness and partial-episode bootstrap-
+novel MuJoCo domain consist-                                         ping (PEB) provide ways to solve this issue, we chose to
+ing of a torque-controlled ball,                                     illustrate the effect of PEB on one of the tasks presented in
+on the horizontal plane, that is                                     (Zhang & Sutton, 2017). In the latter, the authors demon-
+used to push a cube to specified                                     strate that experience replay can significantly hurt the learn-
+target positions. Once the cube                                      ing process if the size of the replay buffer is not tuned well.
+has touched the target, the agent is rewarded and the target         One of the environments used is a deterministic gridworld
+is moved away from the cube to a new random position.                with a fixed starting state and goal, shown in Figure 7. As
+Because the task lacks terminal states, it can continue indef-       proposed by the authors, tabular Q-learning is used with
+initely. The terrain is surrounded by fixed bounding walls.          values initialized to 0, a penalty of −1 at each time step, no
+The inner edge of the walls stops the cube but not the ball in       discount, a time limit T = 200, and an ε-greedy exploration
+order to let the agent move the cube even if it is in a corner.      using a fixed 10% chance of random actions. Figure 7 shows
+The environment’s state representation consists of the coor-         the performance with respect to the number of training steps,
+dinates of the ball, the cube, and the target, the velocities of     averaged over 30 seeds, from 0 to 29. We successfully repli-
+the ball and the cube, and the rotation of the cube. The agent       cated the figure showing that the performance deteriorates
+receives a reward of 1 every time the cube reaches the target.       very quickly with buffer size and demonstrate that by simply
+                                               Time Limits in Reinforcement Learning
+
+                                                replay without PEB                      replay with PEB
+
+
+                                        −100                                 −100                                            buffer   40
+                                                                                                                             buffer   60
+              .
+                                                                                                                             buffer   100
+                                        −150                                 −150
+                                                                                                                             buffer   1M
+
+                                        −200                                 −200
+                         ×                     0                 2 × 106            0                 2 × 106
+
+Figure 7. Performance comparison of tabular Q-learning with and without partial-episode bootstrapping with γ = 1 on the Difficult
+Gridworld (T = 200) problem presented in (Zhang & Sutton, 2017). The averaged scores and standard errors are shown with respect to the
+number of training steps. When timeout terminations are not properly considered, experience replay significantly hurts the performance,
+while by simply continuing to bootstrap whenever a timeout termination is encountered, the learning is much faster and varying the buffer
+size has almost no effect.
+
+
+bootstrapping from states when the time limit is reached the          general, the agent needs to use reliable predictions. This is
+effect of the buffer size is vastly diminished.                       in general resolved by enabling sufficient exploration. How-
+                                                                      ever, when the interactions are limited in time, exploration
+4. Discussion                                                         of the full state-space may not be feasible from fixed starting
+                                                                      states. Thus, a good way to allow appropriate exploration in
+We showed in Section 2 that time-awareness is required                such domains is to sufficiently randomize the initial states. It
+for correct credit assignment in domains where the agent              is worth noting that partial-episode bootstrapping is generic
+has to optimize its performance over a time-limited horizon.          in that it is not restricted to partial episodes only due to time
+However, common time-unaware agents still often manage                limits. In fact, this approach is valid for any early termi-
+to perform relatively well. This could be due to several              nation causes. For example, it is common in curriculum
+reasons including: if time limits are so long that timeouts           learning to start from states nearby the goals and gradually
+are hardly ever experienced (e.g. in the Arcade Learning              expand to further ones (Florensa et al., 2017). In this case,
+Environment (ALE) (Bellemare et al., 2013; Machado et al.,            it can be helpful to stitch the learned values by terminating
+2017) domains where T = 5 minutes), if there are clues in             the episodes and bootstrapping as soon as the agent enters a
+the observations that are correlated with time (e.g. the for-         well-known state.
+ward distance), if it is not likely to observe the same states
+at different remaining times, or if the discount factor is            5. Conclusion
+sufficiently small to reduce the impact of the confusion. Fur-
+thermore, many methods exist to handle POMDPs (Lovejoy,               We considered the problem of learning optimal policies in
+1991). In deep learning (LeCun et al., 2015; Schmidhuber,             time-limited and time-unlimited domains using time-limited
+2015), it is highly common to use a stack of previous obser-          interactions. We showed that time limits should be care-
+vations or recurrent neural networks (RNNs) (Goodfellow               fully manipulated to avoid state aliasing and perceived non-
+et al., 2016) to address partial observations (Wierstra et al.,       stationarity of the environment. We explained that when
+2009). These solutions may to an extent help when a notion            learning policies for time-limited tasks, it is important to
+of the remaining time is not included as part of the agent’s          include a notion of the remaining time as part of the agent’s
+input. However, including this information is much simpler            input. We then showed that, when learning policies for time-
+and allows better diagnosis of the learned policies. The              unlimited tasks, it is necessary for correct value estimation,
+considered approach is rather generic and can be applied to           to continue bootstrapping at the end of the partial episodes
+domains with varying time limits. It is also interesting to           when termination is due to time limits, or any early termina-
+note that time-awareness can allow, to an extent, the agent to        tion causes other than the environmental ones. In both cases
+learn open-loop (state-independent) policies which can be             we observed significant improvements in the performance
+easier to learn than closed-loop ones. For example, if a task         of the considered reinforcement learning algorithms.
+involves a fixed starting state and no stochastic transitions,
+then an optimal policy can rely only on the time. Finally, in         Acknowledgments
+real-world applications, such as robotics, the real clock time
+can be used in place of discrete fixed time steps.                    The research presented in this paper has been supported by
+                                                                      Dyson Technology Ltd., Samsung, and EPSRC. We also
+In order for the partial-episode bootstrapping method in Sec-
+                                                                      acknowledge computation resources provided by Microsoft
+tion 3 to work, as is the case for bootstrapping methods in
+                                                                      via a Microsoft Azure award.
+                                           Time Limits in Reinforcement Learning
+
+References                                                      Lin, L.-J. Self-improving reactive agents based on reinforce-
+                                                                  ment learning, planning and teaching. Machine Learning,
+Arulkumaran, K., Deisenroth, M. P., Brundage, M., and
+                                                                  8(3-4):293–321, 1992.
+  Bharath, A. A. A brief survey of deep reinforcement
+  learning. arXiv preprint arXiv:1708.05866, 2017.              Lovejoy, W. S. A survey of algorithmic methods for par-
+                                                                  tially observed Markov decision processes. Annals of
+Bellemare, M. G., Naddaf, Y., Veness, J., and Bowling, M.         Operations Research, 28(1):47–65, 1991.
+  The Arcade Learning Environment: an evaluation plat-
+  form for general agents. Journal of Artificial Intelligence   Machado, M. C., Bellemare, M. G., Talvitie, E., Veness,
+  Research (JAIR), 47:253–279, 2013.                             J., Hausknecht, M., and Bowling, M. Revisiting the
+                                                                 Arcade Learning Environment: evaluation protocols
+Bertsekas, D. P. Dynamic programming and optimal control.        and open problems for general agents. arXiv preprint
+  Athena Scientific, 1995.                                       arXiv:1709.06009, 2017.
+Bertsekas, D. P. and Tsitsiklis, J. Neuro-Dynamic Program-      Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A. A., Ve-
+  ming. Athena Scientific, 1996.                                 ness, J., Bellemare, M. G., Graves, A., Riedmiller, M.,
+                                                                 Fidjeland, A. K., Ostrovski, G., Petersen, S., Beattie, C.,
+Brockman, G., Cheung, V., Pettersson, L., Schneider, J.,         Sadik, A., Antonoglou, I., King, H., Kumaran, D., Wier-
+  Schulman, J., Tang, J., and Zaremba, W. OpenAI Gym.            stra, D., Legg, S., and Hassabis, D. Human-level control
+  arXiv preprint arXiv:1606.01540, 2016.                         through deep reinforcement learning. Nature, 518(7540):
+                                                                 529–533, 2015.
+Duan, Y., Chen, X., Houthooft, R., Schulman, J., and
+ Abbeel, P. Benchmarking deep reinforcement learning            Ng, A. Y., Harada, D., and Russell, S. Policy invariance
+  for continuous control. In International Conference on          under reward transformations: theory and application to
+ Machine Learning (ICML), pp. 1329–1338, 2016.                    reward shaping. In International Conference on Machine
+                                                                 Learning (ICML), pp. 278–287, 1999.
+Florensa, C., Held, D., Wulfmeier, M., and Abbeel, P. Re-
+  verse curriculum generation for reinforcement learning.       Puterman, M. L. Markov decision processes: discrete
+  arXiv preprint arXiv:1707.05300, 2017.                          stochastic dynamic programming. John Wiley & Sons,
+                                                                  2014.
+Goodfellow, I., Bengio, Y., and Courville, A. Deep Learning.
+  MIT Press, 2016.                                              Schaul, T., Quan, J., Antonoglou, I., and Silver, D. Priori-
+                                                                  tized experience replay. In International Conference on
+Harada, D. Reinforcement learning with time. In AAAI              Learning Representations (ICLR), 2016.
+  Conference on Artificial Intelligence (AAAI), pp. 577–
+  582. AAAI Press, 1997.                                        Schmidhuber, J. Deep learning in neural networks: an
+                                                                  overview. Neural Networks, 61:85–117, 2015.
+Heess, N., Sriram, S., Lemmon, J., Merel, J., Wayne, G.,
+                                                                Schulman, J., Moritz, P., Levine, S., Jordan, M., and Abbeel,
+  Tassa, Y., Erez, T., Wang, Z., Eslami, A., Riedmiller,
+                                                                  P. High-dimensional continuous control using generalized
+  M., and Silver, D. Emergence of locomotion behaviours
+                                                                  advantage estimation. In International Conference on
+  in rich environments. arXiv preprint arXiv:1707.02286,
+                                                                  Learning Representations (ICLR), 2016.
+  2017.
+                                                                Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and
+Henderson, P., Islam, R., Bachman, P., Pineau, J., Precup,        Klimov, O. Proximal policy optimization algorithms.
+  D., and Meger, D. Deep reinforcement learning that              arXiv preprint arXiv:1707.06347, 2017.
+  matters. arXiv preprint arXiv:1709.06560, 2017.
+                                                                Sutton, R. S. Learning to predict by the methods of temporal
+Hesse, C., Plappert, M., Radford, A., Schulman, J., Sidor,        differences. Machine Learning, 3(1):9–44, 1988.
+  S., and Wu, Y. OpenAI Baselines. https://github.
+  com/openai/baselines, 2017.                                   Sutton, R. S. and Barto, A. G. Reinforcement Learning: an
+                                                                  Introduction. MIT Press, 1998.
+Kaelbling, L. P., Littman, M. L., and Moore, A. W. Re-
+  inforcement learning: a survey. Journal of Artificial         Sutton, R. S., McAllester, D. A., Singh, S. P., and Mansour,
+  Intelligence Research (JAIR), 4:237–285, 1996.                  Y. Policy gradient methods for reinforcement learning
+                                                                  with function approximation. In Advances in Neural
+LeCun, Y., Bengio, Y., and Hinton, G. Deep learning. Na-          Information Processing Systems (NIPS), pp. 1057–1063,
+  ture, 521(7553):436–444, 2015.                                  2000.
+                                         Time Limits in Reinforcement Learning
+
+Szepesvari, C. Algorithms for Reinforcement Learning.
+  Morgan and Claypool, 2010.
+Todorov, E., Erez, T., and Tassa, Y. MuJoCo: a physics
+  engine for model-based control. In Intelligent Robots and
+  Systems (IROS), IEEE/RSJ International Conference on,
+  pp. 5026–5033, 2012.
+
+Watkins, C. J. and Dayan, P. Q-learning. Machine learning,
+ 8(3-4):279–292, 1992.
+White, M. Unifying task specification in reinforcement
+ learning. In International Conference on Machine Learn-
+ ing (ICML), pp. 3742–3750, 2017.
+
+Whitehead, S. D. and Ballard, D. H. Learning to perceive
+ and act by trial and error. Machine Learning, 7(1):45–83,
+ 1991.
+Wierstra, D., Förster, A., Peters, J., and Schmidhuber, J.
+ Recurrent policy gradients. Logic Journal of IGPL, 18
+ (5):620–634, 2009.
+Williams, R. J. Simple statistical gradient-following algo-
+ rithms for connectionist reinforcement learning. Machine
+ Learning, 8(3-4):229–256, 1992.
+
+Zhang, S. and Sutton, R. S. A deeper look at experience
+  replay. arXiv preprint arXiv:1712.01275, 2017.
+

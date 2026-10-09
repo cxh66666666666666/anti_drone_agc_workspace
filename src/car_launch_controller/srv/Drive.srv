@@ -1,0 +1,8 @@
+float32 distance
+float32 speed
+float32 timeout
+---
+bool success
+uint8 result
+float32 achieved_distance
+string message

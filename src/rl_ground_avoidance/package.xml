@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>rl_ground_avoidance</name>
+  <version>0.0.0</version>
+  <description>Ground vehicle DQN obstacle avoidance (mirrors rl_obstacle_avoidance for a diff-drive car)</description>
+  <maintainer email="ubuntu@todo.todo">ubuntu</maintainer>
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>rospy</depend>
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>nav_msgs</depend>
+  <depend>gazebo_msgs</depend>
+  <depend>gazebo_ros</depend>
+  <depend>rl_obstacle_avoidance</depend>
+</package>

@@ -53,6 +53,7 @@ anti_drone_agc_workspace/
     ├── drone_launch_controller/   # 无人机发射控制器（连接监控/自检/解锁/起飞）
     ├── lqr_trajectory_tracker/    # LQR 轨迹跟踪器
     ├── rl_obstacle_avoidance/     # 感知 + 规则避障 + DQN 训练/评估包
+    ├── rl_ground_avoidance/     # 地面车 DQN 避障包（镜像无人机部分，运动学+虚拟激光）
     ├── gazebo_ros_pkgs/           # Gazebo ROS 集成包
     ├── velodyne_description/      # Velodyne 模型描述
     ├── velodyne_gazebo_plugins/   # Velodyne Gazebo 传感器插件

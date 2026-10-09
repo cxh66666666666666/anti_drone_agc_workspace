@@ -12,3 +12,10 @@ training_runs/
 *.pyc
 __pycache__/
 .DS_Store
+
+# 大型生成数据 / 测试缓存（迁移基线不携带）
+experiments/
+.pytest_cache/
+
+# 误把命令行参数当成路径生成的空文件（如 --seed / --run-dir）
+--*

@@ -1,0 +1,436 @@
+                                               Bench2FreeAD: A Benchmark for End-to-end Navigation in
+                                                         Unstructured Robotic Environments
+                                                  Yuhang Peng, Sidong Wang, Jihaoyu Yang, Shilong Li, Han Wang, and Jiangtao Gong
+
+
+                                            Abstract— Most current end-to-end (E2E) autonomous           ing actions without explicit intermediate steps. These
+                                         driving algorithms are built on standard vehicles in            approaches have shown particular promise in urban
+                                         structured transportation scenarios, lacking exploration        settings with well-defined road structures, traffic rules,
+                                         of robot navigation for unstructured scenarios such as
+arXiv:2503.12180v2 [cs.RO] 17 Nov 2025
+
+
+
+
+                                         auxiliary roads, campus roads, and indoor settings. This        and predictable agent behaviors. The VAD model [4]
+                                         paper investigates E2E robot navigation in unstructured         further advanced this field by utilizing vectorized bird’s-
+                                         road environments. First, we present two data collection        eye view (BEV) representations, enabling more efficient
+                                         pipelines: one for acquiring real-world robotic data, and       real-time decision-making while maintaining high per-
+                                         another for generating synthetic data using a Unity-            formance standards. Despite these advancements, most
+                                         based simulator. which together produce an unstructured
+                                         robotics navigation dataset—FreeWorld Dataset. Second,          E2E driving models have been primarily developed and
+                                         we fine-tuned two efficient E2E autonomous driving model,       evaluated on datasets like nuScenes [5], which focus
+                                         VAD and LAW, using our data sets to validate the per-           on standard high-speed vehicles in structured urban
+                                         formance and adaptability of E2E autonomous driving             environments.
+                                         models in these environments. Results demonstrate that             Concurrently, robot navigation technologies have
+                                         fine-tuning through our dataset significantly enhances the
+                                         navigation potential of E2E autonomous driving models           evolved along several paths. Traditional approaches
+                                         in unstructured robotic environments. Thus, this paper          relied on rule-based methods such as A* and Dijk-
+                                         presents the first dataset targeting E2E robot navigation       stra’s algorithm [6], which perform well in controlled
+                                         tasks in unstructured scenarios, and provides a benchmark       environments but struggle with uncertainty and dy-
+                                         based on vision-based E2E autonomous driving algorithms         namic scenarios. Statistical methods, including SLAM
+                                         to facilitate the development of E2E navigation technology
+                                         for logistics and service robots. The project is available on   techniques [7], improved adaptability by incorporating
+                                         Github1 .                                                       probabilistic frameworks that better handle sensor noise
+                                                                                                         and partial observability. More recently, learning-based
+                                                                                                         methods have gained prominence, with Deep Rein-
+                                                                                                         forcement Learning (DRL)[8] enabling robots to learn
+                                                                                                         complex behaviors through environmental interaction.
+                                                                                                         Imitation learning approaches[9] have shown particular
+                                                                                                         promise by allowing robots to mimic expert demonstra-
+                                                                                                         tions, accelerating the acquisition of effective navigation
+                                                                                                         strategies without extensive trial-and-error.
+                                                                                                            Despite these parallel advancements, autonomous
+                                                                                                         navigation in unstructured environments presents per-
+                                                                                                         sistent challenges that remain inadequately addressed.
+                                         Fig. 1: Overview of the real vehicle setup, sensor coor-        These environments—including auxiliary roads, low-
+                                         dinate system, and camera group field of view.                  speed zones, indoor spaces, and irregularly shaped path-
+                                                                                                         ways—lack the clear demarcations, consistent surfaces,
+                                                                                                         and predictable layouts of structured settings. Navigation
+                                                           I. INTRODUCTION
+                                                                                                         in such contexts requires robust handling of ambigu-
+                                            In recent years, end-to-end (E2E) autonomous driving         ous boundaries, variable terrain, unexpected obstacles,
+                                         models have made remarkable progress, revolutionizing           and complex interactions with pedestrians and other
+                                         the field of autonomous transportation. Models such as          dynamic agents. Current datasets like Replica [10],
+                                         DETR3D [1], BEVFormer [2], and UniAD [3] have                   Matterport3D [11], and GOOSE [12] provide valuable
+                                         demonstrated impressive capabilities in structured en-          resources but lack comprehensive coverage of unstruc-
+                                         vironments by directly mapping sensory inputs to driv-          tured scenarios with appropriate annotations for end-to-
+                                                                                                         end autonomous navigation.
+                                            Corresponding      author Jiangtao Gong (gongjiang-
+                                         tao@air.tsinghua.edu.cn)                                           In this paper, we address these challenges by develop-
+                                            1 https://github.com/AIR-DISCOVER/FreeAD/                    ing a comprehensive approach to E2E robot navigation
+in unstructured environments. We introduce two com-
+plementary data collection pipelines: one gathering real-
+world robot navigation data across various unstructured
+settings, and another generating synthetic data using
+the Unity-based simulation environment. These pipelines
+yield a rich, diverse dataset specifically designed for
+training and evaluating navigation models in unstruc-
+tured scenarios. Our dataset features annotations of road
+dividers as the primary static object class (with all other
+areas considered navigable) and 3D bounding boxes for
+dynamic objects, particularly pedestrians and cars.
+   Building on this dataset, we fine-tune the VAD [4]
+and LAW [13] model for unstructured environment nav-
+igation. This adaptation process involves adjusting the
+model architecture to better handle the unique charac-
+teristics of unstructured environments while maintaining
+computational efficiency for deployment on resource-          Fig. 2: An example from the FreeWorld dataset. We see
+constrained robot platforms. Our fine-tuning methodol-        6 different camera views and lidar data, as well as the
+ogy balances performance enhancement with general-            human annotated semantic map. At the bottom we show
+ization capabilities, ensuring the model functions effec-     the human written scene description.
+tively across a range of previously unseen unstructured
+scenarios.
+   The contributions of this work are threefold:
+   • We present the first comprehensive dataset specif-
+      ically designed for E2E robot navigation in un-
+      structured environments, featuring both real-world
+      and synthetic data with appropriate annotations for
+      static maps and dynamic objects.
+   • We demonstrate the successful adaptation of the
+      VAD and LAW model to unstructured navigation
+      contexts through a specialized fine-tuning process,
+      significantly enhancing its performance in these
+      challenging scenarios.
+   • We establish a benchmark for vision-based E2E au-
+      tonomous navigation in unstructured environments,
+      providing a foundation for future research in this      Fig. 3: The upper part illustrates the grid-based heat
+      emerging field and facilitating the development of      occupancy map and its vectorized representation gen-
+      navigation technologies for logistics and service       erated in the Unity simulation environment. The lower
+      robots.                                                 part shows 3D bounding boxes of object instances (e.g.,
+                                                              humans and cars) produced by the Unity Perception
+            II. T HE F REE W ORLD DATASET
+                                                              package.
+A. Dataset Overview
+   We collected more than 2,000 samples in 3 hours in
+real world, covering five maps with vector annotations        we used a rule-based algorithm to generate trajectories,
+across 50 scenes, and annotated more than 2,000 3D            which serve as baseline references to evaluate motion
+bounding boxes. An example is shown in Fig.2. Our             prediction and planning tasks.
+dataset consists of two primary modalities: images and
+LiDAR point clouds. Images are mainly used to train           B. Dataset Comparison
+vision-based models, whereas LiDAR point clouds are              By Table I, our benchmark distinguishes itself by pro-
+mainly used for map reconstruction. We further collected      viding full coverage 360◦ , while many existing robotic
+63,429 simulated samples within 17 hours using the            datasets are limited to monocular or single-direction
+Unity-based simulator, which we refer to as the virtual       views [15], [18], [19], [20], [21], [22], [23], [26], [27],
+environment dataset. These samples include diverse driv-      [24]. This restriction hinders the applicability of BEV-
+ing scenarios with vectorized annotations. In addition,       based methods in unstructured environments, where
+TABLE I: Comparison of Different Datasets. We extracted dataset statistics primarily from the respective
+publications. If essential details were missing and could not be confirmed via author communication, we mark
+them as N/A. If a dataset inherently does not provide a certain type of information, we denote it with “–”. Pose: G
+= GPS/GNSS; R = relative odometry (IMU/LiDAR/visual-inertial); S = SLAM-estimated trajectory.
+                                                                       Time
+Dataset              Pose   Clxzs 3D Annotation 2D Frames Sequences           Real/Sim. Environment Map Info     Map Type
+                                                                      of Day
+KITTI [14]        G+R         3        15K             13K     22      M, A     Y/N        Outdoor       –             –
+nuScenes [5]      G+R        23        40K            1.4M    1000    M, A, E   Y/N        Outdoor     4 maps       vector
+CODa [15]         S+G        53        32K            131K     54     M, A, E   Y/N        Outdoor       –             –
+JRDB [16]          –          1        28K             28K      –      M, A     Y/N     Outdoor/Indoor   –             –
+SCAND [17]         –          –          –            626K      –      M, A     Y/N     Outdoor/Indoor   –             –
+TartanAir [18]     –          6        N/A             N/A    1037     M, A     N/Y     Outdoor/Indoor   –        occupancy
+M2DGR [19]        G+R         –          –             N/A     36      M, A     Y/N     Outdoor/Indoor   –             –
+ViViD++ [20]      G+R         –          –              –      36     M, A, E   Y/N     Outdoor/Indoor   –             –
+Hilti-Oxford [21] G+R         –          –             N/A     16        –      Y/N         Indoor       –             –
+MCD [22]           R         29        N/A             N/A     18     M, A, E   Y/N     Outdoor/Indoor   –             –
+MulRan [23]        G          –          –              –      10      M, A     Y/N        Outdoor       –             –
+SubT-MRS [24]      G          –          –             N/A      –     M, A, E   Y/N     Outdoor/Indoor   –             –
+360Loc [25]        R          –          –           56.72k    18     M, A, E   Y/N     Outdoor/Indoor   –             –
+NCLT [26]         G+R         –          –             N/A     27     M, A, E   Y/N     Outdoor/Indoor   –        occupancy
+HuRoN [27]        G+R         –          –             N/A    N/A        –      Y/N         Indoor       –       topological
+FreeWorld (Ours) S+R+G       16        1.5M           130K     309    M, A, E   Y/Y     Outdoor/Indoor 6 maps vector, occupancy
+
+
+          Sensor Type             Specifications
+                                 6x Camera RGB
+                                                               unnecessary. Road dividers serve as representations of
+                              7Hz capture frequency            boundaries and static obstacles that cannot be traversed.
+                              1/2.5” IMX274 sensor             All other areas are considered navigable. We believe that
+            Camera                  HFOV: 93°
+                                    VFOV: 61°
+                                                               reducing the emphasis on semantic segmentation will
+                             1920 × 1080 resolution,           help the model focus more on obstacle detection and
+                        auto exposure, JPEG compressed         learn their general characteristics.
+                          1x Lidar Spinning, 16 beams
+                             20Hz capture frequency            D. Robot Setup
+                               360° horizontal FOV
+             Lidar                                                1) Real World: We employ a custom-built small
+                            −15° to 15° vertical FOV
+                        ≤ 150m range, ±2cm accuracy,           robot, with the sensor layout illustrated in Fig. 1 and
+                          up to 300k points per second
+                                   IMU, HI229
+                                                               detailed specifications provided in Table II. Unlike
+             IMU           10° heading, 0.8° roll/pitch        nuScenes, our LiDAR coordinates align with the ego
+                                400Hz update rate              frame. The sensors are securely mounted using a custom
+  TABLE II: Sensor specifications in the real world            designed module (shown in Fig. 1) to ensure stable and
+                                                               precise positioning. Each of the six cameras is equipped
+                                                               with a horizontal field of view (HFOV) of 93 ° and a
+broader scene coverage is essential. In addition, a large      vertical field of view (VFOV) of 61 °. This wide field of
+portion of robotics datasets lack map annotations, which       view allows the robot to capture a more comprehensive
+further limits the ability of downstream methods to            perspective at close distances, ensuring adequate overlap
+generate accurate and reliable BEV representations [15],       between the views of different cameras, as shown in
+[16], [17], [19], [20], [21], [22], [23], [24], [25].          Fig. 1. In contrast to outdoor vehicles, which typically
+                                                               possess longer detection ranges, the cameras in our
+C. Benchmark                                                   robot are specifically optimized for close-range, high-
+   We use a different benchmark for map definition             resolution observation.
+compared to the nuScenes [5] dataset, as our environ-             2) Virtual Environment: The virtual environment is
+ment is unstructured. Instead of following the structured      constructed using the Unity High-Definition Render
+mapping approach used in MapTR [28], we model the              Pipeline (HDRP). A sensor group is mounted at a
+ground truth (GT) map using a simplified semantic              human-like height of 1.6 meters, serving as the ref-
+layer that focuses primarily on road dividers. Although        erence point for data acquisition. All six cameras are
+we initially experimented with the incorporation of            co-located at this position but oriented in different
+both boundaries and dividers, we found that it was             directions, thereby eliminating the need for explicit
+extrinsic calibration. Together, the six cameras provide a   I. Data Annotation
+seamless panoramic viewpoint for comprehensive scene            In the real-world scenario, 3D bounding box anno-
+perception.                                                  tations are generated using the joint annotation tool
+                                                             described in [30], which integrates LiDAR and image
+E. Sensor Synchronization                                    data to improve the efficiency and precision of labeling.
+                                                             In the Unity simulation, we leverage the Perception
+   In our real-world robotic setup, we employ the ROS2       package [29] to automatically generate 3D bounding
+approximate-time synchronizer to align sensor data.          boxes, as well as additional supervisory signals such as
+Measurements are filtered if the time difference between     semantic segmentation images and related annotations.
+the main sensors (six cameras and one LiDAR) exceeds
+0.2 s. When a main sensor sample is captured, the IMU                              III. M ETRICS
+and odometry measurements are subsequently triggered         A. Average Precision
+to ensure temporal synchronization. In the Unity simula-       We adopt the Average Precision (AP) metric with a
+tion environment, sensor synchronization is achieved by      twist: matches are based on the 2D center distance d
+triggering all virtual sensors within the same rendering     on the ground plane instead of IoU. This decouples
+frame, ensuring that their outputs are temporally aligned.   detection accuracy from object size and orientation,
+                                                             making comparisons with vision-only methods fairer.
+F. Imitation Behavior                                        AP is computed as the normalized area under the
+                                                             precision-recall curve, considering only operating points
+   In the real-world setup, the robot is teleoperated via    where both recall and precision exceed 10%. If none
+remote control, enabling the operator to navigate toward     exist, AP is zero.
+designated targets while avoiding dynamic obstacles
+such as pedestrians. This procedure yields valuable          B. L2 Error
+datasets that capture human-like navigation behaviors.          The L2 error is defined as the mean Euclidean dis-
+In the virtual environment, Unity’s navigation mesh          tance between predicted and ground
+                                                                                              PT truth trajectories
+(NavMesh) framework is employed in combination with          over T steps, i.e., L2 Error = T1 t=1 ∥τt − τtgt ∥2 .
+an A* algorithm for global trajectory planning and the
+Social Force Model (SFM) for local obstacle avoidance.       C. Collision Rate
+Together, these components generate high-quality expert         Collision rate quantifies how often the planned tra-
+demonstrations of navigation strategies, which serve as      jectory intersects obstacles. At each step, the vehicle’s
+a foundation for subsequent learning and evaluation.         polygonal footprint is projected onto the BEV map. A
+                                                             collision is flagged if any pixel overlaps an obstacle.
+                                                             ForPN trajectories,  it is defined as Collision Rate =
+G. Localization                                               1    N PT
+                                                             N     i=1   t=1 ⊮(collision i,t ), where ⊮(·) = 1 if a
+   In the real-world setup, localization is achieved using   collision occurs, and 0 otherwise.
+a LiDAR-SLAM algorithm, as GPS signals are unavail-
+                                                                                 IV. E XPERIMENTS
+able in indoor environments. This method demonstrates
+high robustness, consistently maintaining localization       A. Implementation Details
+errors within 10 cm during data collection. In contrast,        We conducted experiments on the FreeWorld dataset,
+within the Unity-based virtual environment, precise po-      which consists of 309 unstructured road scenes. The
+sitional information is directly obtained from the Unity     dataset comprises approximately 1.5 million 3D bound-
+system or its Perception [29] package, providing global      ing boxes spanning 16 object categories. Scene images
+or camera pixel coordinate data without the need for         are captured using six cameras that collectively provide
+additional localization algorithms.                          a 360° horizontal field of view, with frames annotated
+                                                             at 2 Hz in the real-world portion and 1 Hz in the
+H. Mapping                                                   virtual portion. Following prior work [4], we evaluate
+                                                             planning performance using displacement error (DE),
+   In the real-world deployment, a LiDAR-SLAM algo-          composition-based average precision (AP) for divider
+rithm was employed to perform mapping across both            detection, and collision rate (CR) across different models
+indoor and outdoor environments. In Unity-based sim-         and dataset subsets.
+ulation, we developed a custom voxel-based method               We conducted fine-tuning experiments on both virtual
+to generate a grid-structured occupancy map. This ap-        and real datasets to evaluate our models. Three dataset
+proach produces a heat-based spatial representation of       configurations were considered: virtual-only (V), real-
+the environment, as illustrated in Fig. 3.                   only (R), and combined virtual+real (V+R).
+Fig. 4: Qualitative results of VAD(r). VAD(r) generates vectorized representations of unstructured scenes and predicts
+3D bounding boxes for people.
+
+TABLE III: Performance comparison of open-loop L2 error and collision rate for different fine-tuned models on
+the FreeWorld dataset in virtual or real part
+ Training Data       Testing Data                  L2 (m) ↓                            Collision   (%) ↓
+                                        1s        2s      3s       Avg.       1s         2s          3s       Avg.
+ VAD                 Virtual           8.38     13.66   18.61      13.55    0.0462     0.0231      0.0154    0.0282
+ VAD(v)              Virtual           8.03     13.02   17.65      12.90    0.0465     0.0232      0.0155    0.0284
+ VAD(r)              Virtual           4.13      6.33    7.87       6.11    0.0405     0.0202      0.0135    0.0247
+ VAD(v+r)            Virtual           3.74      6.14    8.24       6.04    0.0418     0.0209      0.0139    0.0255
+ LAW                 Virtual           7.29     13.70   20.28      13.75    0.0440     0.0220      0.0150    0.0270
+ LAW(v)              Virtual           2.16      3.30    3.75       3.07    0.0218     0.0109      0.0073    0.0133
+ LAW(r)              Virtual           2.32      3.81    4.80       3.64    0.0230     0.0110      0.0080    0.0140
+ LAW(v+r)            Virtual           2.20      3.39    3.99       3.19    0.0206     0.0103      0.0069    0.0126
+ VAD(v)              Real              0.42      0.59    0.75       0.59    0.0066     0.0166      0.0159    0.0130
+ VAD(r)              Real              0.43      0.61    0.77       0.60    0.0070     0.0077      0.0100    0.0082
+ VAD(v+r)            Real              0.43      0.61    0.78       0.61    0.0151     0.0219      0.0250    0.0207
+ LAW                 Real             13.21     22.08 30.91        22.06    0.0009     0.0005      0.0003    0.0006
+ LAW(v)              Real              0.28      0.43    0.58       0.43    0.0027     0.0045      0.0102    0.0058
+ LAW(r)              Real              0.28      0.43    0.57       0.42    0.0027     0.0040      0.0045    0.0037
+ LAW(v+r)            Real              0.26      0.39    0.51       0.39    0.0027     0.0045      0.0057    0.0043
+
+
+   For the LAW (perception-free) model:                     more effective than manually designed rules in unstruc-
+   • V: fine-tuned for 3 epochs on the virtual dataset.     tured environments. This observation is well-justified:
+   • R: fine-tuned for 1 epoch on the real dataset.         unstructured scenarios are inherently more complex and
+   • V+R: first fine-tuned for 3 epochs on the virtual      require a deeper and more comprehensive understanding
+     dataset, followed by 1 epoch on the real dataset.      of the environment, whereas rule-based approaches may
+                                                            overlook critical information, limiting their effective-
+   For the VAD-Base model, fine-tuning was performed
+                                                            ness. Consequently, LAW exhibits superior performance
+in two stages:
+                                                            across both the virtual and real parts of our dataset.
+   • V: Stage 1, fine-tuned for 3 epochs on the virtual
+     dataset; Stage 2, fine-tuned for 1 epoch.                 It is also worth noting that the original LAW model
+   • R: Stage 1, fine-tuned for 1 epoch on the real         exhibits substantially larger L2 errors, even exceeding
+     dataset; Stage 2, fine-tuned for 1 epoch.              those of the original VAD. Its collision rate on real
+   • V+R: Stage 1, fine-tuned for 3 epochs on the virtual   data is therefore not meaningful, as the excessively
+     dataset and 1 epoch on the real dataset; Stage 2,      large L2 errors render the model’s behavior entirely
+     fine-tuned for 1 epoch on each dataset.                inconsistent with the task. After fine-tuning, however,
+                                                            LAW achieves performance far superior to VAD. This
+B. Results And Analysis                                     phenomenon can be explained by the significant dis-
+   As shown in Table III, the fine-tuned LAW model          crepancies between the implicit features of structured
+consistently outperforms the VAD model. This indicates      and unstructured environments, which lead LAW to
+that LAW not only achieves state-of-the-art (SOTA)          display unreasonable behaviors when directly applied to
+performance in autonomous driving scenarios, but also       unstructured scenarios.
+demonstrates that implicit representation is generally         In addition, models trained with additional virtual data
+(that is, LAW(v) and LAW(v + r) on virtual testing             •   Dataset Expansion and Diversity: We plan to
+data, and LAW(v + r) on real testing data) generally               further expand the FreeWorld dataset to include
+achieve lower L2 errors. Moreover, under the same                  more diverse environments, such as industrial sites,
+testing dataset, models trained solely on virtual data and         crowded public spaces, and outdoor natural terrains.
+those trained solely on real data exhibit very similar             Increasing the variety and scale of data will help
+performance in both L2 errors and collision rates. This            improve model generalization and robustness.
+suggests that our collected virtual and real data —-or         •   Real-world Deployment and Closed-loop Evalua-
+the underlying scenes —-are perceived by the model as              tion: We aim to deploy the fine-tuned models on
+belonging to the same distribution. Furthermore, models            physical robots for closed-loop navigation tasks, en-
+fine-tuned with real data achieve lower collision rates,           abling evaluation of real-time performance, safety,
+likely because the base models were originally trained             and adaptability in dynamic, unpredictable environ-
+on datasets such as nuScenes, which are derived from               ments.
+real-world environments. Consequently, fine-tuning with        •   Advanced Method Paradigms: Future work will
+real data proves more effective for adapting to target             also explore the development of Vision-Language-
+and motion prediction in unstructured environments,                Action (VLA) models, which tightly couple percep-
+whereas training exclusively on virtual data provides              tion, reasoning, and decision-making. By leverag-
+comparatively limited benefits.                                    ing language-guided representations together with
+                                                                   visual and action signals, VLA-based approaches
+C. Qualitative Results
+                                                                   could significantly enhance the adaptability, inter-
+   We show three vectorized scene learning and planning            pretability, and efficiency of E2E navigation models
+results of VAD(r) in Fig. 4 and VAD results in Fig.5.              in unstructured environments.
+For a better understanding of the scene, we also provide       •   Benchmark Extension: We will continue to refine
+raw surrounding camera images                                      and extend our benchmark metrics to cover addi-
+        V. C ONCLUSIONS AND F UTURE W ORK                          tional aspects of navigation, such as social compli-
+A. Conclusions                                                     ance, energy efficiency, and long-term autonomy.
+   In this work, we present Bench2FreeAD, a compre-
+hensive benchmark for end-to-end (E2E) robot navi-                                VI. A PPENDIX
+gation in unstructured environments. Our main con-
+tributions include the development of the FreeWorld          A. Additional Qualitative Results
+dataset, which consists of both real-world and synthetic
+data collected through carefully designed pipelines. The
+dataset provides rich annotations for static and dynamic
+objects, enabling robust training and evaluation of E2E
+navigation models.
+   We fine-tuned two state-of-the-art E2E autonomous
+driving models, VAD and LAW, on our dataset and
+demonstrated significant improvements in navigation          Fig. 5: Qualitative results of VAD on the FreeWorld
+performance within unstructured scenarios. Experimen-        dataset.
+tal results show that the LAW model, which lever-
+ages implicit representations, consistently outperforms
+the VAD model, especially in complex and ambiguous           B. Maps
+environments. Furthermore, our analysis indicates that
+virtual and real data are perceived as similar by the
+models, and fine-tuning with real data further enhances
+collision avoidance.
+   By establishing this benchmark and dataset, we pro-
+vide a solid foundation for future research in E2E
+navigation for logistics and service robots operating in
+challenging, unstructured environments.
+B. Future Work
+  While our benchmark and dataset address several key
+challenges in unstructured robot navigation, there remain    Fig. 6: Visualization of ego poses in the RealWorld Map
+important directions for future research:                    1
+                                                                         [10] J. Straub, T. Whelan, L. Ma, Y. Chen, E. Wijmans, S. Green,
+                                                                              J. J. Engel, R. Mur-Artal, C. Ren, S. Verma, et al., “The
+                                                                              replica dataset: A digital replica of indoor spaces,” arXiv preprint
+                                                                              arXiv:1906.05797, 2019.
+                                                                         [11] A. Chang, A. Dai, T. Funkhouser, M. Halber, M. Niessner,
+                                                                              M. Savva, S. Song, A. Zeng, and Y. Zhang, “Matterport3d:
+                                                                              Learning from rgb-d data in indoor environments,” arXiv preprint
+                                                                              arXiv:1709.06158, 2017.
+                                                                         [12] P. Mortimer, R. Hagmanns, M. Granero, T. Luettel, J. Petereit,
+                                                                              and H.-J. Wuensche, “The goose dataset for perception in
+                                                                              unstructured environments,” in 2024 IEEE International Con-
+                                                                              ference on Robotics and Automation (ICRA). IEEE, 2024, pp.
+                                                                              14 838–14 844.
+                                                                         [13] Y. Li, L. Fan, J. He, Y. Wang, Y. Chen, Z. Zhang, and T. Tan,
+Fig. 7: Visualization of ego poses in the RealWorld Map                       “Enhancing end-to-end autonomous driving with latent world
+2                                                                             model,” arXiv preprint arXiv:2406.08481, 2024.
+                                                                         [14] A. Geiger, P. Lenz, and R. Urtasun, “Are we ready for au-
+                                                                              tonomous driving? the kitti vision benchmark suite,” in 2012
+                                                                              IEEE conference on computer vision and pattern recognition.
+                                                                              IEEE, 2012, pp. 3354–3361.
+                                                                         [15] K. Li, K. Chen, H. Wang, L. Hong, C. Ye, J. Han, Y. Chen,
+                                                                              W. Zhang, C. Xu, D.-Y. Yeung, et al., “Coda: A real-world road
+                                                                              corner case dataset for object detection in autonomous driving,”
+                                                                              in European conference on computer vision. Springer, 2022,
+                                                                              pp. 406–423.
+                                                                         [16] D. T. Le, C. Gou, S. Datta, H. Shi, I. Reid, J. Cai, and
+                                                                              H. Rezatofighi, “Jrdb-panotrack: An open-world panoptic seg-
+                                                                              mentation and tracking robotic dataset in crowded human en-
+                                                                              vironments,” in Proceedings of the IEEE/CVF Conference on
+                                                                              Computer Vision and Pattern Recognition, 2024, pp. 22 325–
+Fig. 8: Visualization of ego poses in the RealWorld Map                       22 334.
+3                                                                        [17] H. Karnan, A. Nair, X. Xiao, G. Warnell, S. Pirk, A. Toshev,
+                                                                              J. Hart, J. Biswas, and P. Stone, “Socially compliant navigation
+                                                                              dataset (scand): A large-scale dataset of demonstrations for social
+                                                                              navigation,” IEEE Robotics and Automation Letters, vol. 7, no. 4,
+                         R EFERENCES                                          pp. 11 807–11 814, 2022.
+                                                                         [18] W. Wang, D. Zhu, X. Wang, Y. Hu, Y. Qiu, C. Wang, Y. Hu,
+[1] Y. Wang, V. C. Guizilini, T. Zhang, Y. Wang, H. Zhao, and                 A. Kapoor, and S. Scherer, “Tartanair: A dataset to push the lim-
+    J. Solomon, “Detr3d: 3d object detection from multi-view images           its of visual slam,” in 2020 IEEE/RSJ International Conference
+    via 3d-to-2d queries,” in Conference on Robot Learning. PMLR,             on Intelligent Robots and Systems (IROS). IEEE, 2020, pp.
+    2022, pp. 180–191.                                                        4909–4916.
+[2] Z. Li, W. Wang, H. Li, E. Xie, C. Sima, T. Lu, Q. Yu, and J. Dai,
+                                                                         [19] J. Yin, A. Li, T. Li, W. Yu, and D. Zou, “M2dgr: A multi-
+    “Bevformer: learning bird’s-eye-view representation from lidar-
+                                                                              sensor and multi-scenario slam dataset for ground robots,” IEEE
+    camera via spatiotemporal transformers,” IEEE Transactions on
+                                                                              Robotics and Automation Letters, vol. 7, no. 2, pp. 2266–2273,
+    Pattern Analysis and Machine Intelligence, 2024.
+                                                                              2021.
+[3] Y. Hu, J. Yang, L. Chen, K. Li, C. Sima, X. Zhu, S. Chai, S. Du,
+    T. Lin, W. Wang, et al., “Planning-oriented autonomous driving,”     [20] A. J. Lee, Y. Cho, Y.-s. Shin, A. Kim, and H. Myung, “Vivid++:
+    in Proceedings of the IEEE/CVF conference on computer vision              Vision for visibility dataset,” IEEE Robotics and Automation
+    and pattern recognition, 2023, pp. 17 853–17 862.                         Letters, vol. 7, no. 3, pp. 6282–6289, 2022.
+[4] B. Jiang, S. Chen, Q. Xu, B. Liao, J. Chen, H. Zhou, Q. Zhang,       [21] L. Zhang, M. Helmberger, L. F. T. Fu, D. Wisth, M. Ca-
+    W. Liu, C. Huang, and X. Wang, “Vad: Vectorized scene repre-              murri, D. Scaramuzza, and M. Fallon, “Hilti-oxford dataset: A
+    sentation for efficient autonomous driving,” in Proceedings of the        millimeter-accurate benchmark for simultaneous localization and
+    IEEE/CVF International Conference on Computer Vision, 2023,               mapping,” IEEE Robotics and Automation Letters, vol. 8, no. 1,
+    pp. 8340–8350.                                                            pp. 408–415, 2022.
+[5] H. Caesar, V. Bankiti, A. H. Lang, S. Vora, V. E. Liong, Q. Xu,      [22] T.-M. Nguyen, S. Yuan, T. H. Nguyen, P. Yin, H. Cao, L. Xie,
+    A. Krishnan, Y. Pan, G. Baldan, and O. Beijbom, “nuscenes:                M. Wozniak, P. Jensfelt, M. Thiel, J. Ziegenbein, et al., “Mcd:
+    A multimodal dataset for autonomous driving,” in Proceedings              Diverse large-scale multi-campus dataset for robot perception,”
+    of the IEEE/CVF conference on computer vision and pattern                 in Proceedings of the IEEE/CVF conference on computer vision
+    recognition, 2020, pp. 11 621–11 631.                                     and pattern recognition, 2024, pp. 22 304–22 313.
+[6] X. Xiao, B. Liu, G. Warnell, and P. Stone, “Motion planning          [23] G. Kim, Y. S. Park, Y. Cho, J. Jeong, and A. Kim, “Mulran: Mul-
+    and control for mobile robot navigation using machine learning:           timodal range dataset for urban place recognition,” in 2020 IEEE
+    a survey,” Autonomous Robots, vol. 46, no. 5, pp. 569–597, 2022.          international conference on robotics and automation (ICRA).
+[7] S. Macenski and I. Jambrecic, “Slam toolbox: Slam for the                 IEEE, 2020, pp. 6246–6253.
+    dynamic world,” Journal of Open Source Software, vol. 6, no. 61,     [24] S. Zhao, Y. Gao, T. Wu, D. Singh, R. Jiang, H. Sun, M. Sarawata,
+    p. 2783, 2021.                                                            Y. Qiu, W. Whittaker, I. Higgins, et al., “Subt-mrs dataset:
+[8] K. Zhu and T. Zhang, “Deep reinforcement learning based                   Pushing slam towards all-weather environments,” in Proceedings
+    mobile robot navigation: A review,” Tsinghua Science and Tech-            of the IEEE/CVF Conference on Computer Vision and Pattern
+    nology, vol. 26, no. 5, pp. 674–691, 2021.                                Recognition, 2024, pp. 22 647–22 657.
+[9] A. Hussein, M. M. Gaber, E. Elyan, and C. Jayne, “Imitation          [25] H. Huang, C. Liu, Y. Zhu, H. Cheng, T. Braud, and S.-K.
+    learning: A survey of learning methods,” ACM Computing Sur-               Yeung, “360loc: A dataset and benchmark for omnidirectional
+    veys (CSUR), vol. 50, no. 2, pp. 1–35, 2017.                              visual localization with cross-device queries,” in Proceedings
+       of the IEEE/CVF Conference on Computer Vision and Pattern
+       Recognition, 2024, pp. 22 314–22 324.
+[26]   N. Carlevaris-Bianco, A. K. Ushani, and R. M. Eustice, “Uni-
+       versity of michigan north campus long-term vision and lidar
+       dataset,” The International Journal of Robotics Research, vol. 35,
+       no. 9, pp. 1023–1035, 2016.
+[27]   D. Shah, B. Eysenbach, G. Kahn, N. Rhinehart, and S. Levine,
+       “Rapid exploration for open-world navigation with latent goal
+       models,” arXiv preprint arXiv:2104.05859, 2021.
+[28]   B. Liao, S. Chen, X. Wang, T. Cheng, Q. Zhang, W. Liu,
+       and C. Huang, “Maptr: Structured modeling and learning
+       for online vectorized hd map construction,” arXiv preprint
+       arXiv:2208.14437, 2022.
+[29]   S. Borkman, A. Crespi, S. Dhakad, S. Ganguly, J. Hogins, Y.-C.
+       Jhang, M. Kamalzadeh, B. Li, S. Leal, P. Parisi, et al., “Unity
+       perception: generate synthetic data for computer vision,” arXiv
+       preprint arXiv:2107.04259, 2021.
+[30]   E. Li, S. Wang, C. Li, D. Li, X. Wu, and Q. Hao, “Sustech
+       points: A portable 3d point cloud interactive annotation platform
+       system,” in 2020 IEEE Intelligent Vehicles Symposium (IV).
+       IEEE, 2020, pp. 1108–1115.
+

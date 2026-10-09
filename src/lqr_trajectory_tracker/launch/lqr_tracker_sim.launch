@@ -3,10 +3,38 @@
   <!-- LQR轨迹跟踪节点 - 仿真环境专用 -->
   <arg name="mavros_ns" default="/mavros" doc="MAVROS命名空间"/>
   <arg name="rviz" default="true" doc="是否启动RViz"/>
-  <arg name="trajectory_type" default="fixed_horizontal" doc="轨迹类型: linear | circular | helical | fixed_horizontal | step"/>
+  <arg name="trajectory_type" default="fixed_horizontal" doc="轨迹类型: linear | circular | helical | fixed_horizontal | figure_eight | step | waypoints"/>
+  <arg name="start_x" default="0.0"/>
+  <arg name="start_y" default="0.0"/>
   <arg name="start_z" default="2.0" doc="线性轨迹起点高度"/>
+  <arg name="end_x" default="10.0"/>
+  <arg name="end_y" default="0.0"/>
+  <arg name="end_z" default="5.0"/>
+  <arg name="center_x" default="0.0"/>
+  <arg name="center_y" default="0.0"/>
+  <arg name="center_z" default="5.0"/>
+  <arg name="radius" default="3.0"/>
+  <arg name="height" default="5.0"/>
   <arg name="step_z" default="5.0" doc="step训练轨迹悬停高度"/>
+  <arg name="fixed_horizontal_left_x" default="-3.0"/>
+  <arg name="fixed_horizontal_left_y" default="0.0"/>
+  <arg name="fixed_horizontal_right_x" default="3.0"/>
+  <arg name="fixed_horizontal_right_y" default="0.0"/>
+  <arg name="fixed_horizontal_radius" default="3.0"/>
   <arg name="fixed_horizontal_height" default="2.0" doc="固定水平八字轨迹高度"/>
+  <arg name="fixed_horizontal_angular_velocity" default="0.2"/>
+  <arg name="figure_eight_center_x" default="0.0"/>
+  <arg name="figure_eight_center_y" default="0.0"/>
+  <arg name="figure_eight_radius_x" default="5.0"/>
+  <arg name="figure_eight_radius_y" default="3.0"/>
+  <arg name="figure_eight_height" default="2.0"/>
+  <arg name="figure_eight_angular_velocity" default="0.2"/>
+  <arg name="trajectory_duration" default="30.0" doc="轨迹总时长(秒)"/>
+  <arg name="loop_trajectory" default="true" doc="是否循环轨迹"/>
+  <arg name="position_lead_time" default="0.02" doc="位置设定点前馈提前时间(秒)"/>
+  <arg name="angular_velocity" default="0.2" doc="圆/螺旋轨迹角速度(rad/s)"/>
+  <arg name="follow_enabled" default="false" doc="N2：是否消费 /agc/air/follow_ref 覆盖基础参考"/>
+  <arg name="follow_timeout_s" default="0.5" doc="N2：跟随参考超时（秒），超时回退基础轨迹"/>
 
   <!-- 启动RViz -->
   <node if="$(arg rviz)" pkg="rviz" type="rviz" name="rviz" args="-d $(find lqr_trajectory_tracker)/rviz/lqr_tracker.rviz">
@@ -17,12 +45,42 @@
     <!-- 先加载 YAML，再用 launch 参数覆盖训练/仿真常用项 -->
     <rosparam file="$(find lqr_trajectory_tracker)/config/default_params.yaml"/>
     <param name="trajectory_type" value="$(arg trajectory_type)"/>
+    <param name="start_x" value="$(arg start_x)"/>
+    <param name="start_y" value="$(arg start_y)"/>
     <param name="start_z" value="$(arg start_z)"/>
+    <param name="end_x" value="$(arg end_x)"/>
+    <param name="end_y" value="$(arg end_y)"/>
+    <param name="end_z" value="$(arg end_z)"/>
+    <param name="center_x" value="$(arg center_x)"/>
+    <param name="center_y" value="$(arg center_y)"/>
+    <param name="center_z" value="$(arg center_z)"/>
+    <param name="radius" value="$(arg radius)"/>
+    <param name="height" value="$(arg height)"/>
     <param name="step_z" value="$(arg step_z)"/>
+    <param name="fixed_horizontal_left_x" value="$(arg fixed_horizontal_left_x)"/>
+    <param name="fixed_horizontal_left_y" value="$(arg fixed_horizontal_left_y)"/>
+    <param name="fixed_horizontal_right_x" value="$(arg fixed_horizontal_right_x)"/>
+    <param name="fixed_horizontal_right_y" value="$(arg fixed_horizontal_right_y)"/>
+    <param name="fixed_horizontal_radius" value="$(arg fixed_horizontal_radius)"/>
     <param name="fixed_horizontal_height" value="$(arg fixed_horizontal_height)"/>
-    <env name="ROSCONSOLE_CONFIG_FILE" value="$(find lqr_trajectory_tracker)/config/rosconsole.config"/>
+    <param name="fixed_horizontal_angular_velocity" value="$(arg fixed_horizontal_angular_velocity)"/>
+    <param name="figure_eight_center_x" value="$(arg figure_eight_center_x)"/>
+    <param name="figure_eight_center_y" value="$(arg figure_eight_center_y)"/>
+    <param name="figure_eight_radius_x" value="$(arg figure_eight_radius_x)"/>
+    <param name="figure_eight_radius_y" value="$(arg figure_eight_radius_y)"/>
+    <param name="figure_eight_height" value="$(arg figure_eight_height)"/>
+    <param name="figure_eight_angular_velocity" value="$(arg figure_eight_angular_velocity)"/>
+    <param name="trajectory_duration" value="$(arg trajectory_duration)"/>
+    <param name="loop_trajectory" value="$(arg loop_trajectory)"/>
+    <param name="position_lead_time" value="$(arg position_lead_time)"/>
+    <param name="angular_velocity" value="$(arg angular_velocity)"/>
+    <param name="follow_enabled" value="$(arg follow_enabled)"/>
+    <param name="follow_timeout_s" value="$(arg follow_timeout_s)"/>
 
     <!-- 话题重映射 -->
     <remap from="/mavros/local_position/pose" to="$(arg mavros_ns)/local_position/pose"/>
+    <remap from="/mavros/local_position/velocity_local" to="$(arg mavros_ns)/local_position/velocity_local"/>
+    <remap from="/mavros/state" to="$(arg mavros_ns)/state"/>
+    <remap from="/mavros/setpoint_position/local" to="$(arg mavros_ns)/setpoint_position/local"/>
   </node>
 </launch>

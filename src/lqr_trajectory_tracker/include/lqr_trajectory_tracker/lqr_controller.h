@@ -58,9 +58,8 @@ public:
 
     /**
      * @brief 求解黎卡提方程，计算反馈增益矩阵K
-     * @return 是否求解成功
      */
-    bool solveRiccati();    
+    void solveRiccati();
 
     /**
      * @brief 计算LQR控制输出
@@ -69,24 +68,6 @@ public:
      * @return ControlOutput 控制输出
      */
     ControlOutput computeControl(const State& current, const State& reference);
-    
-    /**
-     * @brief 获取系统状态矩阵A
-     * @return 系统状态矩阵A
-     */
-    Eigen::Matrix<double, 6, 6> getA() const { return A_; }
-
-    /**
-     * @brief 获取系统输入矩阵B
-     * @return 系统输入矩阵B
-     */
-    Eigen::Matrix<double, 6, 3> getB() const { return B_; }
-
-    /**
-     * @brief 获取LQR反馈增益矩阵K
-     * @return LQR反馈增益矩阵K
-     */
-    Eigen::Matrix<double, 3, 6> getK() const { return K_; }
 
 private:
     /**

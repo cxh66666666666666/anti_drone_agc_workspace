@@ -1,0 +1,19 @@
+<launch>
+    <!-- 小车控制器：仅启动控制器节点，仿真由 car_sim.launch 统一负责 -->
+    <arg name="gazebo_ns" default="/ground_gazebo" doc="Gazebo 节点命名空间"/>
+    <arg name="quiet_car_status" default="false" doc="为 true 时不将 car_status 回显到日志"/>
+
+    <node name="car_launch_controller"
+          pkg="car_launch_controller"
+          type="car_launch_controller_node"
+          output="screen"
+          required="false">
+        <!-- 将节点内绝对名重映射到可配置的 gazebo 命名空间 -->
+        <remap from="/ground_gazebo/link_states" to="$(arg gazebo_ns)/link_states"/>
+        <remap from="/ground_gazebo/set_model_state" to="$(arg gazebo_ns)/set_model_state"/>
+    </node>
+
+    <node pkg="rostopic" type="rostopic" name="car_status_monitor"
+          args="echo /car_launch_controller/car_status"
+          output="log" unless="$(arg quiet_car_status)"/>
+</launch>

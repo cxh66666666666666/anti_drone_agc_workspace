@@ -10,9 +10,8 @@
 #include <geometry_msgs/AccelStamped.h>
 #include <nav_msgs/Path.h>
 #include <std_msgs/Float64.h>
-#include <mavros_msgs/CommandBool.h>
-#include <mavros_msgs/ParamSet.h>
 #include <std_srvs/Trigger.h>
+#include <algorithm>
 #include <cmath>
 
 namespace lqr_trajectory_tracker {
@@ -29,10 +28,15 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     , has_mavros_state_(false)
     , rl_offset_(0.0, 0.0, 0.0)
     , has_rl_offset_(false)
+    , rl_commanded_speed_scale_(1.0)
+    , rl_pause_progress_(false)
+    , rl_phase_direction_(1.0)
     , rl_speed_scale_(0.3)
     , rl_velocity_gain_(0.0)
     , max_rl_velocity_(1.0)
+    , position_lead_time_(0.02)
     , trajectory_duration_(10.0)
+    , loop_trajectory_(true)
     , control_rate_(50.0)
     , dt_(0.02)
     , q_pos_xy_(10.0)
@@ -40,8 +44,6 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     , q_vel_xy_(1.0)
     , q_vel_z_(2.0)
     , r_accel_(0.1)
-    , max_position_error_(0.0)
-    , mean_position_error_(0.0)
     , start_point_(0, 0, 0)
     , end_point_(10, 0, 5)
     , center_point_(5, 0, 5)
@@ -53,10 +55,22 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     loadParameters();
     
     pose_sub_ = nh_.subscribe("/mavros/local_position/pose", 10, &LQRTrackerNode::poseCallback, this);
+    velocity_sub_ = nh_.subscribe("/mavros/local_position/velocity_local", 10,
+                                  &LQRTrackerNode::velocityCallback, this);
     state_sub_ = nh_.subscribe("/mavros/state", 10, &LQRTrackerNode::stateCallback, this);
     local_offset_sub_ = nh_.subscribe("/rl_planner/local_offset", 10, &LQRTrackerNode::localOffsetCallback, this);
+    local_control_sub_ = nh_.subscribe("/rl_planner/local_control", 10, &LQRTrackerNode::localControlCallback, this);
+    waypoints_sub_ = nh_.subscribe("/lqr_tracker/waypoints", 10, &LQRTrackerNode::waypointsCallback, this);
+    if (follow_enabled_)
+    {
+        follow_ref_sub_ = nh_.subscribe("/agc/air/follow_ref", 10,
+                                        &LQRTrackerNode::followRefCallback, this);
+        ROS_INFO("[LQR] 已启用可选跟随参考 /agc/air/follow_ref（超时 %.2fs）", follow_timeout_s_);
+    }
     reset_trajectory_service_ = nh_.advertiseService(
         "/lqr_tracker/reset_trajectory", &LQRTrackerNode::resetTrajectoryCallback, this);
+    reload_trajectory_service_ = nh_.advertiseService(
+        "/lqr_tracker/reload_trajectory", &LQRTrackerNode::reloadTrajectoryCallback, this);
     
     pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
     accel_pub_ = nh_.advertise<geometry_msgs::AccelStamped>("/lqr_tracker/accel_cmd", 10);
@@ -64,6 +78,10 @@ LQRTrackerNode::LQRTrackerNode(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     adjusted_ref_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/lqr_tracker/adjusted_ref", 10);
     reference_velocity_pub_ = nh_.advertise<geometry_msgs::Vector3Stamped>(
         "/lqr_tracker/reference_velocity", 10);
+    reference_mid_lookahead_velocity_pub_ = nh_.advertise<geometry_msgs::Vector3Stamped>(
+        "/lqr_tracker/reference_mid_lookahead_velocity", 10);
+    reference_lookahead_velocity_pub_ = nh_.advertise<geometry_msgs::Vector3Stamped>(
+        "/lqr_tracker/reference_lookahead_velocity", 10);
     flown_path_pub_ = nh_.advertise<visualization_msgs::Marker>("/lqr_tracker/flown_path", 10);
     pos_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/position_error", 10);
     vel_error_pub_ = nh_.advertise<std_msgs::Float64>("/lqr_tracker/velocity_error", 10);
@@ -118,13 +136,27 @@ LQRTrackerNode::~LQRTrackerNode() {}
  */
 void LQRTrackerNode::loadParameters() 
 {
-    // 轨迹类型: linear | circular | helical | fixed_horizontal
+    // 轨迹类型: linear | circular | helical | fixed_horizontal | figure_eight | step | waypoints
     pnh_.param<std::string>("trajectory_type", trajectory_type_, "fixed_horizontal");
+    pnh_.param<double>("waypoint_speed", waypoint_speed_, 1.02);
+    pnh_.param<double>("avoidance_lookahead_time", avoidance_lookahead_time_, 2.0);
+    if (avoidance_lookahead_time_ < 0.0)
+    {
+        ROS_WARN("[LQR] avoidance_lookahead_time 不能为负，使用 0.0");
+        avoidance_lookahead_time_ = 0.0;
+    }
     pnh_.param<double>("trajectory_duration", trajectory_duration_, 30.0);
+    pnh_.param<bool>("loop_trajectory", loop_trajectory_, true);
     pnh_.param<double>("control_rate", control_rate_, 50.0);
     pnh_.param<double>("rl_speed_scale", rl_speed_scale_, 0.3);  // 避障时的参考速度缩放系数
     pnh_.param<double>("rl_velocity_gain", rl_velocity_gain_, 0.0);  // 累积偏移默认只改位置参考
     pnh_.param<double>("max_rl_velocity", max_rl_velocity_, 1.0);
+    pnh_.param<double>("position_lead_time", position_lead_time_, dt_);
+
+    // N2：可选跟随参考（/agc/air/follow_ref）；默认关闭，不影响既有轨迹类型
+    pnh_.param<bool>("follow_enabled", follow_enabled_, false);
+    pnh_.param<double>("follow_timeout_s", follow_timeout_s_, 0.5);
+    has_follow_ref_ = false;
     
     pnh_.param<double>("q_pos_xy", q_pos_xy_, 10.0);
     pnh_.param<double>("q_pos_z", q_pos_z_, 15.0);
@@ -155,6 +187,13 @@ void LQRTrackerNode::loadParameters()
     pnh_.param<double>("fixed_horizontal_radius", fixed_horizontal_params_.radius, 3.0);
     pnh_.param<double>("fixed_horizontal_height", fixed_horizontal_params_.height, 2.0);
     pnh_.param<double>("fixed_horizontal_angular_velocity", fixed_horizontal_params_.angular_velocity, 0.2);
+
+    pnh_.param<double>("figure_eight_center_x", figure_eight_params_.center_x, 0.0);
+    pnh_.param<double>("figure_eight_center_y", figure_eight_params_.center_y, 0.0);
+    pnh_.param<double>("figure_eight_radius_x", figure_eight_params_.radius_x, 5.0);
+    pnh_.param<double>("figure_eight_radius_y", figure_eight_params_.radius_y, 3.0);
+    pnh_.param<double>("figure_eight_height", figure_eight_params_.height, 2.0);
+    pnh_.param<double>("figure_eight_angular_velocity", figure_eight_params_.angular_velocity, 0.2);
 
     // 悬停轨迹参数（用于 RL 训练）
     pnh_.param<double>("step_x", step_position_.x(), 0.0);
@@ -192,7 +231,12 @@ void LQRTrackerNode::generateTrajectory()
     {
         trajectory_ = traj_generator_.generateFixedHorizontalTrajectory(
             fixed_horizontal_params_, trajectory_duration_, dt_);
-    } 
+    }
+    else if (trajectory_type_ == "figure_eight")
+    {
+        trajectory_ = traj_generator_.generateFigureEightTrajectory(
+            figure_eight_params_, trajectory_duration_, dt_);
+    }
     else if (trajectory_type_ == "step") 
     {
         trajectory_ = traj_generator_.generateStepTrajectory(
@@ -200,6 +244,33 @@ void LQRTrackerNode::generateTrajectory()
         ROS_INFO("[LQR] 悬停轨迹: (%.1f, %.1f, %.1f)", 
                  step_position_.x(), step_position_.y(), step_position_.z());
     } 
+    else if (trajectory_type_ == "waypoints")
+    {
+        if (waypoints_.empty())
+        {
+            // 尚未收到 A* 航点：在起飞高度悬停等待
+            Eigen::Vector3d hover(start_point_.x(), start_point_.y(), 5.0);
+            trajectory_ = traj_generator_.generateStepTrajectory(
+                hover, 600.0, dt_);
+            ROS_INFO("[LQR] 航点轨迹: 等待航点输入，悬停于 (%.1f, %.1f, %.1f)",
+                     hover.x(), hover.y(), hover.z());
+        }
+        else if (waypoints_.size() == 1)
+        {
+            trajectory_ = traj_generator_.generateStepTrajectory(
+                waypoints_.front(), 600.0, dt_);
+            ROS_INFO("[LQR] 单点航点保持: (%.2f, %.2f, %.2f)",
+                     waypoints_.front().x(), waypoints_.front().y(),
+                     waypoints_.front().z());
+        }
+        else
+        {
+            trajectory_ = traj_generator_.generateWaypointTrajectory(
+                waypoints_, waypoint_speed_, dt_);
+            ROS_INFO("[LQR] 航点轨迹: %zu 个航点, 速度 %.2f m/s, 生成 %zu 个轨迹点",
+                     waypoints_.size(), waypoint_speed_, trajectory_.size());
+        }
+    }
     else 
     {
         ROS_WARN("[LQR] 未知轨迹类型: %s, 使用圆形轨迹", trajectory_type_.c_str());
@@ -221,6 +292,14 @@ void LQRTrackerNode::poseCallback(const geometry_msgs::PoseStamped::ConstPtr& ms
     current_state_.position.y() = msg->pose.position.y;
     current_state_.position.z() = msg->pose.position.z;
     has_state_ = true;
+}
+
+void LQRTrackerNode::velocityCallback(
+    const geometry_msgs::TwistStamped::ConstPtr& msg)
+{
+    current_state_.velocity.x() = msg->twist.linear.x;
+    current_state_.velocity.y() = msg->twist.linear.y;
+    current_state_.velocity.z() = msg->twist.linear.z;
 }
 
 /**
@@ -249,15 +328,76 @@ void LQRTrackerNode::localOffsetCallback(const geometry_msgs::Vector3Stamped::Co
     has_rl_offset_ = true;
 }
 
-bool LQRTrackerNode::resetTrajectoryCallback(std_srvs::Trigger::Request&,
-                                             std_srvs::Trigger::Response& res)
+void LQRTrackerNode::localControlCallback(const geometry_msgs::Vector3Stamped::ConstPtr& msg)
+{
+    last_rl_control_time_ = msg->header.stamp;
+    rl_commanded_speed_scale_ = std::max(0.0, std::min(1.0, msg->vector.x));
+    rl_pause_progress_ = msg->vector.y > 0.5;
+    rl_phase_direction_ = msg->vector.z < -0.5 ? -1.0 : 1.0;
+}
+
+/**
+ * @brief 接收 A* 全局路径航点：重生成时间参数化轨迹并从 t=0 开始跟踪
+ */
+void LQRTrackerNode::waypointsCallback(const nav_msgs::Path::ConstPtr& msg)
+{
+    if (msg->poses.empty())
+    {
+        ROS_WARN("[LQR] 收到空航点路径，忽略");
+        return;
+    }
+    waypoints_.clear();
+    for (const auto& pose : msg->poses)
+    {
+        waypoints_.push_back(Eigen::Vector3d(pose.pose.position.x,
+                                             pose.pose.position.y,
+                                             pose.pose.position.z));
+    }
+    generateTrajectory();
+    trajectory_start_time_ = ros::Time::now();
+    last_control_loop_time_ = trajectory_start_time_;
+    rl_commanded_speed_scale_ = 1.0;
+    rl_pause_progress_ = false;
+    rl_phase_direction_ = 1.0;
+    publishTrajectoryVisualization();
+    ROS_INFO("[LQR] 收到新航点路径: %zu 点, 起点(%.1f,%.1f) 终点(%.1f,%.1f)",
+             waypoints_.size(), waypoints_.front().x(), waypoints_.front().y(),
+             waypoints_.back().x(), waypoints_.back().y());
+}
+
+/**
+ * @brief 接收可选跟随参考（/agc/air/follow_ref，N2）。仅在 follow_enabled 时覆盖基础参考；
+ *        超时未更新则回退到基础轨迹（不追陈旧参考）。
+ */
+void LQRTrackerNode::followRefCallback(const geometry_msgs::PoseStamped::ConstPtr& msg)
+{
+    follow_ref_ = Eigen::Vector3d(msg->pose.position.x, msg->pose.position.y,
+                                  msg->pose.position.z);
+    last_follow_time_ = ros::Time::now();
+    has_follow_ref_ = true;
+}
+
+/**
+ * @brief 将跟踪相位、RL 偏移与误差统计复位到 t=0（reset/reload 共用）
+ */
+void LQRTrackerNode::resetTrackingState()
 {
     trajectory_start_time_ = ros::Time::now();
+    last_control_loop_time_ = trajectory_start_time_;
+    rl_commanded_speed_scale_ = 1.0;
+    rl_pause_progress_ = false;
+    rl_phase_direction_ = 1.0;
     rl_offset_ = Eigen::Vector3d::Zero();
     has_rl_offset_ = false;
     position_errors_.clear();
     velocity_errors_.clear();
     flown_path_marker_.points.clear();
+}
+
+bool LQRTrackerNode::resetTrajectoryCallback(std_srvs::Trigger::Request&,
+                                             std_srvs::Trigger::Response& res)
+{
+    resetTrackingState();
 
     if (!trajectory_.empty())
     {
@@ -267,6 +407,30 @@ bool LQRTrackerNode::resetTrajectoryCallback(std_srvs::Trigger::Request&,
     res.success = true;
     res.message = "trajectory restarted from t=0";
     ROS_INFO("[Tracking] 收到 episode reset，参考轨迹已从 t=0 重新开始");
+    return true;
+}
+
+/**
+ * @brief 重载轨迹：重新读取 /lqr_tracker_node 几何参数并生成新轨迹，
+ *        供训练换场景时调用（清空旧轨迹 + 相位复位到 t=0）。
+ */
+bool LQRTrackerNode::reloadTrajectoryCallback(std_srvs::Trigger::Request&,
+                                              std_srvs::Trigger::Response& res)
+{
+    trajectory_.clear();
+    loadParameters();
+    generateTrajectory();
+
+    resetTrackingState();
+
+    if (!trajectory_.empty())
+    {
+        publishPositionSetpoint(trajectory_.front().position);
+    }
+
+    res.success = true;
+    res.message = "trajectory reloaded from t=0";
+    ROS_INFO("[Tracking] 换场景：轨迹几何已重载并复位到 t=0");
     return true;
 }
 
@@ -298,10 +462,16 @@ void LQRTrackerNode::publishTrajectoryVisualization()
     ref_path_pub_.publish(ref_path);
     
     ROS_INFO("[Visualization] 发布轨迹，包含 %zu 个点", trajectory_.size());
+    Eigen::Vector3d minimum = trajectory_.front().position;
+    Eigen::Vector3d maximum = trajectory_.front().position;
+    for (const auto& point : trajectory_)
+    {
+        minimum = minimum.cwiseMin(point.position);
+        maximum = maximum.cwiseMax(point.position);
+    }
     ROS_INFO("[Visualization] 轨迹范围: X[%.2f, %.2f], Y[%.2f, %.2f], Z[%.2f, %.2f]",
-             trajectory_.front().position.x(), trajectory_.back().position.x(),
-             trajectory_.front().position.y(), trajectory_.back().position.y(),
-             trajectory_.front().position.z(), trajectory_.back().position.z());
+             minimum.x(), maximum.x(), minimum.y(), maximum.y(),
+             minimum.z(), maximum.z());
 }
 
 /**
@@ -364,21 +534,21 @@ void LQRTrackerNode::logTrackingStats()
     if (position_errors_.empty()) return;
     
     double sum_pos = 0.0;
-    max_position_error_ = 0.0;
+    double max_position_error = 0.0;
     
     for (double err : position_errors_) 
     {
         sum_pos += err;
-        if (err > max_position_error_) max_position_error_ = err;
+        if (err > max_position_error) max_position_error = err;
     }
     
-    mean_position_error_ = sum_pos / position_errors_.size();
+    const double mean_position_error = sum_pos / position_errors_.size();
     
     ROS_INFO("========================================");
     ROS_INFO("[Tracking Statistics]");
     ROS_INFO("  总样本数: %zu", position_errors_.size());
-    ROS_INFO("  最大位置误差: %.4f m", max_position_error_);
-    ROS_INFO("  平均位置误差: %.4f m", mean_position_error_);
+    ROS_INFO("  最大位置误差: %.4f m", max_position_error);
+    ROS_INFO("  平均位置误差: %.4f m", mean_position_error);
     ROS_INFO("  RMS误差: %.4f m", std::sqrt(sum_pos / position_errors_.size()));
     ROS_INFO("========================================");
 }
@@ -417,8 +587,9 @@ Eigen::Vector3d LQRTrackerNode::computeLQRControl(const State& current, const Tr
     // 使用双积分器模型：p = p_ref + 0.5 * a * dt^2
     Eigen::Vector3d position_correction = 0.5 * control.acceleration * dt_ * dt_;
     
-    // 添加速度前馈：p = p_ref + v_ref * dt + 0.5 * a * dt^2
-    position_correction += ref.velocity * dt_;
+    // 位置前馈：补偿 PX4 位置环的表观响应延迟。默认值保持原有
+    // dt 前馈；实验可通过 position_lead_time 覆盖并独立评估。
+    position_correction += ref.velocity * position_lead_time_;
     
     return ref.position + position_correction;
 }
@@ -434,6 +605,7 @@ void LQRTrackerNode::trackingLoop()
     trajectory_start_time_ = ros::Time::now();
     ros::Time last_viz_pub_time = ros::Time::now();
     int loop_count = 0;
+    int print_count = 0;
     
     // 清空之前的误差记录
     position_errors_.clear();
@@ -450,8 +622,36 @@ void LQRTrackerNode::trackingLoop()
             continue;
         }
         
-        // 计算当前时间与开始时间的差值（单位：秒）
-        double elapsed = (ros::Time::now() - trajectory_start_time_).toSec();
+        const ros::Time loop_time = ros::Time::now();
+        if (last_control_loop_time_.isZero())
+        {
+            last_control_loop_time_ = loop_time;
+        }
+        if (!last_rl_control_time_.isZero() &&
+            (loop_time - last_rl_control_time_).toSec() > 0.5)
+        {
+            // A lost planner heartbeat must never release an explicit hold.
+            // Reset/recovery relies on the hold while Gazebo and PX4
+            // state-estimates catch up; clearing it here lets the old
+            // trajectory immediately pull the vehicle away again.  Only a
+            // non-paused command is allowed to fall back to normal tracking.
+            if (!rl_pause_progress_)
+            {
+                rl_commanded_speed_scale_ = 1.0;
+                rl_phase_direction_ = 1.0;
+            }
+        }
+        const ros::Duration loop_delta = loop_time - last_control_loop_time_;
+        // Advance trajectory phase by the same scale used for reference
+        // velocity. Moving the start time by the unconsumed portion makes
+        // position and velocity references slow down together.
+        const double phase_scale = (rl_pause_progress_ ? 0.0 :
+            rl_phase_direction_ * rl_commanded_speed_scale_);
+        trajectory_start_time_ += ros::Duration(
+            loop_delta.toSec() * (1.0 - phase_scale));
+        last_control_loop_time_ = loop_time;
+        // speed_scale=0 freezes phase; intermediate values advance it slowly.
+        double elapsed = (loop_time - trajectory_start_time_).toSec();
         if (elapsed < 0.0)
         {
             trajectory_start_time_ = ros::Time::now();
@@ -466,8 +666,9 @@ void LQRTrackerNode::trackingLoop()
         }
         
         // 检查是否完成一次轨迹循环（使用实际轨迹时间长度）
+        // waypoints 轨迹不循环：到达终点后保持最后参考点（悬停等待终止判定）
         double cycle_duration = trajectory_.empty() ? trajectory_duration_ : trajectory_.back().timestamp;
-        if (elapsed > cycle_duration) 
+        if (loop_trajectory_ && trajectory_type_ != "waypoints" && elapsed > cycle_duration)
         {
             loop_count++;
             ROS_INFO("[Tracking] 第 %d 次循环完成（周期 %.1fs）！重启轨迹...", loop_count, cycle_duration);
@@ -490,10 +691,34 @@ void LQRTrackerNode::trackingLoop()
         geometry_msgs::Vector3Stamped reference_velocity_msg;
         reference_velocity_msg.header.stamp = ros::Time::now();
         reference_velocity_msg.header.frame_id = "map";
-        reference_velocity_msg.vector.x = ref_point.velocity.x();
-        reference_velocity_msg.vector.y = ref_point.velocity.y();
-        reference_velocity_msg.vector.z = ref_point.velocity.z();
+        // This topic defines the trajectory-forward frame for perception.
+        // Reverse recovery changes the commanded phase, not what "front" means.
+        reference_velocity_msg.vector.x = ref_point.velocity.x() * rl_commanded_speed_scale_;
+        reference_velocity_msg.vector.y = ref_point.velocity.y() * rl_commanded_speed_scale_;
+        reference_velocity_msg.vector.z = ref_point.velocity.z() * rl_commanded_speed_scale_;
         reference_velocity_pub_.publish(reference_velocity_msg);
+
+        const double mid_lookahead_elapsed = std::min(
+            elapsed + 0.5 * avoidance_lookahead_time_, cycle_duration);
+        const TrajectoryPoint mid_lookahead_ref =
+            traj_generator_.getPointAtTime(trajectory_, mid_lookahead_elapsed);
+        geometry_msgs::Vector3Stamped mid_lookahead_velocity_msg;
+        mid_lookahead_velocity_msg.header = reference_velocity_msg.header;
+        mid_lookahead_velocity_msg.vector.x = mid_lookahead_ref.velocity.x();
+        mid_lookahead_velocity_msg.vector.y = mid_lookahead_ref.velocity.y();
+        mid_lookahead_velocity_msg.vector.z = mid_lookahead_ref.velocity.z();
+        reference_mid_lookahead_velocity_pub_.publish(mid_lookahead_velocity_msg);
+
+        const double lookahead_elapsed = std::min(
+            elapsed + avoidance_lookahead_time_, cycle_duration);
+        const TrajectoryPoint lookahead_ref =
+            traj_generator_.getPointAtTime(trajectory_, lookahead_elapsed);
+        geometry_msgs::Vector3Stamped lookahead_velocity_msg;
+        lookahead_velocity_msg.header = reference_velocity_msg.header;
+        lookahead_velocity_msg.vector.x = lookahead_ref.velocity.x();
+        lookahead_velocity_msg.vector.y = lookahead_ref.velocity.y();
+        lookahead_velocity_msg.vector.z = lookahead_ref.velocity.z();
+        reference_lookahead_velocity_pub_.publish(lookahead_velocity_msg);
 
         // RL偏移超时保护：超过0.5s未收到 /rl_planner/local_offset 则自动清零
         if (has_rl_offset_ && (ros::Time::now() - last_rl_offset_time_).toSec() > 0.5)
@@ -507,15 +732,6 @@ void LQRTrackerNode::trackingLoop()
         if (has_rl_offset_)
         {
             ref_point.position += rl_offset_;
-            // 检测到障碍物时减速 + 增加侧向速度分量
-            if (rl_offset_.z() > 0.01)
-            {
-                ref_point.velocity *= 0.0;  // 紧急避障：停止前向运动
-            }
-            else
-            {
-                ref_point.velocity *= rl_speed_scale_;  // 非紧急：按比例减速
-            }
             Eigen::Vector3d rl_velocity = rl_offset_ * rl_velocity_gain_;
             double rl_velocity_norm = rl_velocity.norm();
             if (rl_velocity_norm > max_rl_velocity_ && rl_velocity_norm > 1e-6)
@@ -523,6 +739,18 @@ void LQRTrackerNode::trackingLoop()
                 rl_velocity *= max_rl_velocity_ / rl_velocity_norm;
             }
             ref_point.velocity += rl_velocity;
+        }
+        // Speed control is independent of whether the local position offset is
+        // zero, so the warning zone can slow down while still following the
+        // unmodified path.
+        ref_point.velocity *= phase_scale;
+
+        // N2：可选跟随参考覆盖基础参考（唯一 setpoint 发布者仍是本节点；超时回退基础轨迹）
+        if (follow_enabled_ && has_follow_ref_ &&
+            (ros::Time::now() - last_follow_time_).toSec() <= follow_timeout_s_)
+        {
+            ref_point.position = follow_ref_;
+            ref_point.velocity = Eigen::Vector3d::Zero();
         }
 
         geometry_msgs::PoseStamped adjusted_ref_msg;
@@ -541,7 +769,6 @@ void LQRTrackerNode::trackingLoop()
         publishPositionSetpoint(desired_position);
         
         // 每5秒打印一次跟踪状态
-        static int print_count = 0;
         if (++print_count % (5 * static_cast<int>(control_rate_)) == 0) 
         {
             TrackingError current_error = computeTrackingError(current_state_, ref_point);
@@ -612,7 +839,8 @@ void LQRTrackerNode::run() {
     {
         ROS_WARN("[Init] 无法联系 drone_launch_controller 释放控制权，可能已释放或未运行");
     }
-    ros::Duration(0.5).sleep();
+    // 交接窗口必须尽量短：交接期无 setpoint 发布会造成 OFFBOARD 空窗
+    ros::Duration(0.05).sleep();
     
     trackingLoop();
     

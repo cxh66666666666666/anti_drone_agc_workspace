@@ -7,7 +7,7 @@
 
 - 无人机与飞控的连接状态监控
 - 系统健康状态自检（电池、GPS、IMU、ESC）
-- 电机解锁控制（支持强制解锁）
+- 电机解锁控制
 - 起飞高度控制与飞行状态发布
 
 ## 系统要求
@@ -32,7 +32,7 @@ rosservice call /drone_launch_controller/connection_status
 rosservice call /drone_launch_controller/drone_health_check
 
 # 5. 解锁电机
-rosservice call /drone_launch_controller/arm_motors "force: false"
+rosservice call /drone_launch_controller/arm_motors
 
 # 6. 起飞
 rosservice call /drone_launch_controller/takeoff "altitude: 5.0" "timeout: 30.0"
@@ -50,7 +50,7 @@ rosservice call /drone_launch_controller/takeoff "altitude: 5.0" "timeout: 30.0"
 |----------|----------|------|
 | `/drone_launch_controller/connection_status` | ConnectionStatus | 查询 MAVROS 连接状态（返回 connected, system_status, message） |
 | `/drone_launch_controller/drone_health_check` | DroneHealthCheck | 触发全局自检，返回 success, result, health_status, message |
-| `/drone_launch_controller/arm_motors` | ArmMotors | 电机解锁（请求: force, 响应: success, result, message） |
+| `/drone_launch_controller/arm_motors` | ArmMotors | 电机解锁（请求: 空, 响应: success, result, message） |
 | `/drone_launch_controller/takeoff` | Takeoff | 起飞控制（请求: altitude, timeout, 响应: success, result, achieved_altitude, message） |
 | `/drone_launch_controller/release_control` | std_srvs/Trigger | 释放起飞控制权（停止悬停保持发布，响应: success, message） |
 
@@ -58,7 +58,7 @@ rosservice call /drone_launch_controller/takeoff "altitude: 5.0" "timeout: 30.0"
 
 | 话题 | 类型 | 说明 |
 |------|------|------|
-| `/drone_launch_controller/flight_status` | FlightStatus | 飞行状态（10 Hz） |
+| `/drone_launch_controller/flight_status` | FlightStatus | 飞行状态（flight_mode, current_altitude, armed, state，10 Hz） |
 | `/mavros/setpoint_position/local` | PoseStamped | 起飞过程中的位置设定点（交由起飞控制器发布） |
 
 ## 订阅话题
@@ -76,28 +76,18 @@ rosservice call /drone_launch_controller/takeoff "altitude: 5.0" "timeout: 30.0"
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `connection_timeout` | 10.0 | MAVROS 连接超时 (秒) |
-| `target_altitude` | 5.0 | 默认起飞高度 (米) |
-| `takeoff_timeout` | 30.0 | 起飞超时 (秒) |
-| `arm_timeout` | 5.0 | 电机解锁超时 (秒) |
-| `max_altitude_limit` | 100.0 | 最大高度限制 (米) |
-| `max_speed_limit` | 10.0 | 最大速度限制 (m/s) |
-| `geofence_radius` | 500.0 | 地理围栏半径 (米) |
-| `status_publish_rate` | 10.0 | 状态发布频率 (Hz) |
 | `mavros_ns` | /mavros | MAVROS 命名空间 |
-| `verbose` | false | 启用详细的飞行状态日志 |
+| `quiet_flight_status` | false | 为 true 时不将 flight_status 回显到日志 |
 
 ## 健康检查状态码
 
 | 位 | 含义 | 条件 |
 |----|------|------|
-| 0x01 | 电池异常 | 电压 < 3.3V 或百分比 < 20% |
+| 0x01 | 电池异常 | 电压无数据（≤0V）或百分比 < 20% |
 | 0x02 | GPS 异常 | 未固定或服务不可用 |
 | 0x04 | IMU 异常 | 数据无效或过期 (>1s) |
-| 0x08 | ESC 异常 | 数据为空或电压异常 |
+| 0x08 | ESC 异常 | 数据为空或电压 ≤ 0V |
 | 0x00 | 全部通过 | 以上检查均正常 |
-
-注: 气压计和磁力计字段保留但始终为 false（当前 MAVROS 话题不支持直接检测）。
 
 ## 使用示例 (Python)
 
@@ -113,7 +103,7 @@ rospy.wait_for_service('/drone_launch_controller/takeoff')
 arm_srv = rospy.ServiceProxy('/drone_launch_controller/arm_motors', ArmMotors)
 takeoff_srv = rospy.ServiceProxy('/drone_launch_controller/takeoff', Takeoff)
 
-arm_srv(force=False)
+arm_srv()
 takeoff_srv(altitude=5.0, timeout=30.0)
 ```
 

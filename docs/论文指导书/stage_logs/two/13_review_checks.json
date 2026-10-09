@@ -1,0 +1,102 @@
+{
+  "fair_compare": {
+    "applied_parameter_source": "N0-declared（baselines/model.py 冻结；三方法共用同一 N0 位置通道原型；N1 为速度通道识别，替换冻结基线超出 N2 范围）",
+    "candidate_replay_steps": 300,
+    "ce1_rule": {
+      "margin_violation_count": 22,
+      "physical_violation_count": 0
+    },
+    "ce1_rule_certificate": "unavailable",
+    "ce3_rule": {
+      "margin_violation_count": 7,
+      "physical_violation_count": 0
+    },
+    "ce3_rule_certificate": "unavailable",
+    "certificate_candidate_steps": 1,
+    "declared_model": {
+      "L_hat": 0.2,
+      "L_range": [
+        0.15,
+        0.25
+      ],
+      "T_lag": 0.85,
+      "a_lat": 0.05,
+      "a_long": 0.2,
+      "dt": 0.02,
+      "evidence_level": "model-level",
+      "margin": 0.15,
+      "model_version": "two-N0-baselines-v1",
+      "v_stop": 0.05
+    },
+    "n_backup_false_safe": 6,
+    "n_candidate_false_safe": 13,
+    "n_candidate_replays": 32,
+    "n_trials": 55
+  },
+  "identification": {
+    "identified_delay_interval_s": [
+      0.18,
+      0.3
+    ],
+    "identified_position_lag_s": 1.1732,
+    "identified_speed_lag_s": 0.2999,
+    "manifest_runs": 12,
+    "ok_runs": 12
+  },
+  "interpretation": {
+    "n1_preserved": "Small SITL identification data exist; no statistical safety bound.",
+    "n2_candidate_metrics": "Candidate execution differs from the one-step certificate; rerun required.",
+    "n3_soundness": "Constant-delay branches do not enclose every allowed switching schedule.",
+    "r0": "Stop current P development; N2/N3 do not justify the stronger R0 claims."
+  },
+  "review_scope": "stage two N1-N4; offline artifact and code audit",
+  "time_varying_delay_counterexample": {
+    "allowed_delay_steps": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "chosen_delay_steps_first_20": [
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      15,
+      15,
+      15,
+      15
+    ],
+    "chosen_delay_steps_unique": [
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15
+    ],
+    "constant_branch_max_x_m": -0.488584849,
+    "excess_over_all_constant_branches_m": 0.005077301,
+    "horizon_steps": 50,
+    "low_noise_coverage_tolerance_m": 0.003,
+    "outside_all_constant_branches_even_with_tolerance": true,
+    "step": 60,
+    "switching_x_m": -0.483507547
+  }
+}

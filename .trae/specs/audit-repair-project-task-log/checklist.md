@@ -1,0 +1,14 @@
+- [x] M1 两处 `agc_params.yaml` 链接指向真实存在的 `src/air_ground_core/config/agc_params.yaml`
+- [x] M0 v1.1/v1.2 不再链接缺失的 `M0_接口契约_v1.0.md`，正文明确 v1.0 已被 v1.1 取代且未随仓库保留
+- [x] 项目总结中不再出现 `agc-m0-v1.0` 或指向不存在路径的契约引用；契约版本为 `agc-m0-v1.2`
+- [x] 项目总结第五节“尚缺条件”不再声称“空地协同闭环未打通/多源融合未落地”，与 M3–M6 已验收一致
+- [x] 下一阶段任务清单 M5 行标注【已验收】并附证据路径
+- [x] `docs/项目任务日志/**/*.md` 与 `docs/项目指导书/*.md` 相对链接检查 0 断裂
+- [x] `ground_drive_adapter` 订阅 `/agc/task/state`，`task_running_ = !isTerminal && state != IDLE`
+- [x] 任务非运行期（IDLE/终态）`ground_drive_adapter` 不调用写位姿，运行期语义（积分/watchdog/写入权核查/零速）不变
+- [x] `catkin build air_ground_core` 编译通过
+- [x] 非无头单栈多 attempt（≥3）中每 attempt 车实际起点 = `car_start (-4.000,-3.000)±1e-2`
+- [x] 复跑批次终态正确、M0 恒等式成立（`valid_task = tracking_success + mission_failure`、`attempted = valid_task + infra + aborted`）、`any_leftover=false`
+- [x] M5 名义组 `verify_control_authority.py` 全 PASS，无 `CONTROL_CONFLICT` 误报、终态零速停稳
+- [x] M5 写入权冲突注入组仍检出外部写车位姿并结算 `CONTROL_CONFLICT`
+- [x] M1/M5/M6 验收文档已补记修复后证据与批次路径，M6 §八.1 标注为已修复

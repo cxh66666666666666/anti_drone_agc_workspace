@@ -1,0 +1,32 @@
+# M6 固定场景：观测丢失（observation loss）。
+# 几何与 scenario_flat.yaml 完全一致（静态障碍 pole_1/pole_2、静态目标）——障碍/地图/阈值
+# 必须与世界 agc_world.world 一致；本场景只用于 M6 的「观测丢失」类别，观测丢失在 run 期
+# 由感知故障注入实现（air_fusion 源 + /agc/perception/fault/*），非场景几何属性。
+scenario_id: flat_obs_loss
+locked: true
+note: "M6 观测丢失类别；几何同 flat_static_target，观测丢失由 run 期注入；所有阈值在 run 前锁定"
+car_start: [-4.0, -3.0, 0.11, 0.0]      # x, y, z, yaw
+target_start: [6.5, 2.5, 2.0, 0.0]      # x, y, z, yaw
+drone_start: [0.0, 0.0, 0.0]
+target_motion:
+  mode: static            # static | linear
+  speed_mps: 0.0
+  waypoints: [[6.5, 2.5], [3.5, 2.5]]
+obstacles:
+  - {name: pole_1, pose: [2.5, 0.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+  - {name: pole_2, pose: [4.5, 1.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+map:
+  resolution_m: 0.5
+  size_x_m: 40.0
+  size_y_m: 40.0
+  origin_x: -20.0
+  origin_y: -20.0
+  unknown_is_obstacle: true
+thresholds:
+  approach_radius_m: 3.0
+  hold_window_s: 5.0
+  confidence_min: 0.5
+  search_timeout_s: 60.0
+  approach_timeout_s: 60.0
+  mission_timeout_s: 120.0
+  target_lost_tolerance_s: 2.0

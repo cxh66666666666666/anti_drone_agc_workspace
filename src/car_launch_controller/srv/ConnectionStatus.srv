@@ -1,0 +1,4 @@
+---
+bool connected
+uint8 system_status
+string message

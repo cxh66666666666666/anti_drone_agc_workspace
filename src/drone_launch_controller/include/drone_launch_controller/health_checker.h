@@ -13,7 +13,6 @@
 #include <sensor_msgs/NavSatFix.h>
 #include <sensor_msgs/Imu.h>
 #include <mavros_msgs/ESCStatus.h>
-#include <mavros_msgs/CommandBool.h>
 #include <drone_launch_controller/DroneHealthStatus.h>
 
 namespace drone_launch_controller {
@@ -93,7 +92,6 @@ private:
      */
     void escCallback(const mavros_msgs::ESCStatus::ConstPtr& msg);
 
-    ros::NodeHandle& nh_;
     ros::Subscriber battery_sub_;
     ros::Subscriber gps_sub_;
     ros::Subscriber imu_sub_;

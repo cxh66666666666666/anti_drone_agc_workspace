@@ -5,14 +5,12 @@
  * @date 2026-05-29
  */
 #include "lqr_trajectory_tracker/lqr_controller.h"
-#include <iostream>
 
 namespace lqr_trajectory_tracker {
 
 /**
  * @brief 构造函数
- * @details 速度权重10，加速度权重1，控制权重0.1
- * @param dt 控制周期，默认0.01秒，100hz
+ * @details 位置权重10，速度权重1，控制权重0.1
  */
 LQRController::LQRController() 
     : dt_(0.01)
@@ -83,10 +81,9 @@ void LQRController::setDt(double dt)
 }
 
 /**
- * @brief 求解Riccati方程
- * @return 是否成功求解
+ * @brief 求解Riccati方程，计算反馈增益矩阵K
  */
-bool LQRController::solveRiccati() 
+void LQRController::solveRiccati() 
 {
     const int max_iterations = 1000;
     // 收敛容差1e-6
@@ -114,8 +111,6 @@ bool LQRController::solveRiccati()
     // 最优反馈增益K = (R + B'·P·B)^(-1)·B'·P·A
     K_ = (R_ + B_.transpose() * P * B_).inverse() * B_.transpose() * P * A_;
     is_initialized_ = true;
-    
-    return true;
 }
 
 /**

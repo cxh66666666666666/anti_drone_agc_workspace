@@ -73,7 +73,7 @@ RViz 在渲染 TF/可视化时，内部调用 `tf2::BufferCore::canTransform()` 
 
 **1. 创建配置文件**
 
-内容（已创建于 `src/lqr_trajectory_tracker/config/rosconsole.config` 和 `src/drone_launch_controller/config/rosconsole.config`）：
+内容（已创建于 `src/lqr_trajectory_tracker/config/rosconsole.config`）：
 
 ```
 log4j.logger.ros.tf2=ERROR
@@ -94,7 +94,6 @@ log4j.logger.ros.tf=ERROR
 | 文件 | 说明 |
 |------|------|
 | `src/lqr_trajectory_tracker/launch/lqr_tracker_sim.launch` | RViz + lqr_tracker_node 均添加 |
-| `src/drone_launch_controller/launch/drone_controller.launch` | 所有节点均添加 |
 
 ### 全局备选方案
 

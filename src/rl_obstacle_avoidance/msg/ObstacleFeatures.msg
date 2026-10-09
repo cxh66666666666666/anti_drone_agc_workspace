@@ -1,4 +1,5 @@
 # 障碍物特征消息
+std_msgs/Header header       # 原始点云时间戳与坐标系
 float64[] lidar_sectors   # 激光雷达扇区最小距离
 float64 target_dir_x    # 目标相对方向
 float64 target_dir_y

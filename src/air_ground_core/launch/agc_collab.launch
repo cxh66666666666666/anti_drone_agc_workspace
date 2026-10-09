@@ -1,0 +1,108 @@
+<launch>
+  <!--
+    agc_collab.launch —— 空地协同 run 主入口（M0 接口契约 v1.1，无头）
+
+    本 launch 是协同 run 的唯一启动入口：一个 gzserver、一个世界 agc_world，
+    全局 /use_sim_time=true。协同 run 明确不含 / 不启动以下内容（任务运行期它们
+    都可能写车体位姿，与「地面唯一运动写入者是 ground_drive_adapter」冲突）：
+      * 不 include rl_ground_avoidance/launch/ground_sim.launch（地面单体实验入口）
+      * 不启动 ground_gazebo（独立地面 gzserver）
+      * 不启动 car_launch_controller 与 car_commander（旧地面执行口，已废弃）
+      * 不启动 ground_env / rl_ground_avoidance 的 RL 环境
+    地面唯一执行口为 /agc/ground/cmd_vel；唯一运动写入者为 ground_drive_adapter。
+    空中控制权：起飞阶段 drone_launch_controller，release_control 后由 lqr_tracker_node
+    接管（由 start_agc_collab.sh 编排，air_control_bridge 核查交接）。
+
+    协同层节点全部为 C++。
+  -->
+  <arg name="gui" default="false" doc="是否启动 Gazebo GUI；协同 run 默认无头"/>
+  <arg name="use_sim_time" default="true" doc="协同 run 全局使用仿真时钟"/>
+  <arg name="scenario_file" default="$(find air_ground_core)/config/scenario_flat.yaml" doc="锁定场景文件"/>
+  <arg name="takeoff_altitude" default="2.0" doc="起飞目标高度(m)，与 /agc/air/takeoff_altitude_m 一致"/>
+  <arg name="target_source" default="gt_adapter" doc="目标源（run 前固定）：gt_adapter | air_fusion"/>
+  <arg name="obstacle_source" default="scenario" doc="障碍源（run 前固定）：scenario | air_fusion"/>
+  <arg name="follow_enabled" default="false" doc="N2：是否启用无人机跟随移动目标（安全距离带）"/>
+  <arg name="mission_timeout_s" default="120.0" doc="N4：run 前冻结的任务超时(s)，用于构造 *_TIMEOUT 场景"/>
+  <arg name="perception_fault_sensor" default="" doc="N4：启动前预置感知故障通道（空=不预置；用于冷启动冲突）"/>
+  <arg name="perception_fault_bias_m" default="3.0" doc="N4：预置离群偏置(m)"/>
+  <arg name="perception_sensors_file" default="$(find air_ground_core)/config/perception_sensors.yaml" doc="D1：感知通道配置文件（可被按场景随机化覆盖）"/>
+  <arg name="run_seed" default="" doc="D1：运行种子（空=不覆盖，日志回落 unseeded）"/>
+  <arg name="world_file" default="$(find air_ground_core)/worlds/agc_world.world" doc="D1：世界文件（可被按场景覆盖，须与场景 obstacles 一致）"/>
+  <arg name="dynamic_obstacles" default="false" doc="热切换：true 时 scenario_reset 动态管理 Gazebo 障碍（配合 agc_world_dynamic.world），false 保持静态障碍不复位"/>
+
+  <!-- 全局仿真时钟与协同层参数 -->
+  <param name="/use_sim_time" value="$(arg use_sim_time)"/>
+  <rosparam file="$(find air_ground_core)/config/agc_params.yaml"/>
+  <param name="/agc/limits/mission_timeout_s" value="$(arg mission_timeout_s)"/>
+  <param name="/agc/scenario_file" value="$(arg scenario_file)"/>
+  <!-- 热切换：true 时 scenario_reset 动态管理 Gazebo 障碍（默认 false，行为与改动前一致） -->
+  <param name="/agc/scenario/dynamic_obstacles" value="$(arg dynamic_obstacles)"/>
+  <!-- D1：实际加载的 world 文件路径，供 agc_run_logger 对 world 取哈希 -->
+  <param name="/agc/world_file" value="$(arg world_file)"/>
+  <!-- 目标/障碍源在 run 前固定，由 launch 单一设置（节点不得自行 setParam 覆盖） -->
+  <param name="/agc/target/source" value="$(arg target_source)"/>
+  <param name="/agc/obstacles/source" value="$(arg obstacle_source)"/>
+  <!-- M4 感知通道配置（真值派生的感知仿真） -->
+  <param name="/agc/perception/sensors_file" value="$(arg perception_sensors_file)"/>
+  <param name="/agc/log/seed" value="$(arg run_seed)" type="str"/>
+  <!-- N4：启动前预置感知故障（在 air_perception 首次观测前即生效，用于冷启动冲突场景） -->
+  <group if="$(eval arg('perception_fault_sensor') != '')">
+    <param name="/agc/perception/fault/$(arg perception_fault_sensor)/enabled" value="true"/>
+    <param name="/agc/perception/fault/$(arg perception_fault_sensor)/outlier_bias_m" value="$(arg perception_fault_bias_m)"/>
+    <param name="/agc/perception/fault/$(arg perception_fault_sensor)/drop_prob" value="0.0"/>
+    <param name="/agc/perception/fault/$(arg perception_fault_sensor)/latency_s" value="0.0"/>
+  </group>
+  <!-- 允许 launch/脚本覆盖起飞高度，保持唯一真值来源 -->
+  <param name="/agc/air/takeoff_altitude_m" value="$(arg takeoff_altitude)"/>
+  <!-- N2：跟随开关（rosparam 载入后覆盖，默认关闭；仅脚本 follow 开关时开启） -->
+  <param name="/agc/air/follow/enabled" value="$(arg follow_enabled)"/>
+  <param name="/agc/air/follow/altitude_m" value="$(arg takeoff_altitude)"/>
+
+  <!-- Gazebo 模型搜索路径：本包模型(agc_car/intruder_uav) + 地面车原模型 + PX4 模型 + Gazebo 模型库(车体网格 car_lexus 等) -->
+  <env name="GAZEBO_MODEL_PATH" value="$(find air_ground_core)/models:$(find rl_ground_avoidance)/models:$(find mavlink_sitl_gazebo)/models:$(optenv HOME)/.gazebo/models:$(optenv GAZEBO_MODEL_PATH)"/>
+
+  <!-- 单一世界：PX4 SITL + Gazebo(agc_world) + MAVROS，自动 spawn iris -->
+  <include file="$(find px4)/launch/mavros_posix_sitl.launch">
+    <arg name="world" value="$(arg world_file)"/>
+    <arg name="vehicle" value="iris"/>
+    <arg name="vehicle_sdf" value="iris_3d_lidar"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="interactive" value="false"/>
+    <arg name="verbose" value="true"/>
+    <arg name="x" value="0"/>
+    <arg name="y" value="0"/>
+    <arg name="z" value="0"/>
+    <arg name="R" value="0"/>
+    <arg name="P" value="0"/>
+    <arg name="Y" value="0"/>
+  </include>
+
+  <!-- 地面控制器：只负责起飞与健康检查，不写车体位姿、不发布地面执行命令 -->
+  <include file="$(find drone_launch_controller)/launch/drone_controller.launch">
+    <arg name="quiet_flight_status" value="true"/>
+  </include>
+
+  <!-- ==================== 协同层节点（全部 C++，见 AGENTS.md） ==================== -->
+  <node pkg="air_ground_core" type="air_odom_adapter" name="air_odom_adapter" output="screen"/>
+  <node pkg="air_ground_core" type="ground_odom_adapter" name="ground_odom_adapter" output="screen"/>
+  <!-- 目标源二选一（run 前固定）：gt_adapter 或 air_fusion，保证 /agc/targets 唯一发布者 -->
+  <node pkg="air_ground_core" type="gt_adapter" name="gt_adapter" output="screen"
+        if="$(eval arg('target_source') == 'gt_adapter')"/>
+  <!-- 多源观测与融合：任一源选 air_fusion 时启用 air_perception + air_fusion -->
+  <node pkg="air_ground_core" type="air_perception" name="air_perception" output="screen"
+        if="$(eval arg('obstacle_source') == 'air_fusion' or arg('target_source') == 'air_fusion')"/>
+  <node pkg="air_ground_core" type="air_fusion" name="air_fusion" output="screen"
+        if="$(eval arg('obstacle_source') == 'air_fusion' or arg('target_source') == 'air_fusion')"/>
+  <node pkg="air_ground_core" type="map_adapter" name="map_adapter" output="screen"/>
+  <node pkg="air_ground_core" type="task_manager" name="task_manager" output="screen"/>
+  <node pkg="air_ground_core" type="ground_planner" name="ground_planner" output="screen"/>
+  <node pkg="air_ground_core" type="ground_commander" name="ground_commander" output="screen"/>
+  <node pkg="air_ground_core" type="ground_drive_adapter" name="ground_drive_adapter" output="screen"/>
+  <node pkg="air_ground_core" type="intruder_driver" name="intruder_driver" output="screen"/>
+  <node pkg="air_ground_core" type="scenario_reset" name="scenario_reset" output="screen"/>
+  <node pkg="air_ground_core" type="agc_run_logger" name="agc_run_logger" output="screen"/>
+  <node pkg="air_ground_core" type="air_control_bridge" name="air_control_bridge" output="screen"/>
+  <!-- N2：无人机跟随移动目标（安全距离带）；仅脚本 follow 开关时启动，默认不影响既有场景 -->
+  <node pkg="air_ground_core" type="air_follow" name="air_follow" output="screen"
+        if="$(arg follow_enabled)"/>
+</launch>

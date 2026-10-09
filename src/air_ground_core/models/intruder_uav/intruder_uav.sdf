@@ -1,0 +1,48 @@
+<?xml version="1.0" ?>
+<!--
+  目标无人机模型 intruder_uav（阶段 A 真值目标，M0 接口契约 v1.2）
+
+  * 无任何插件；<gravity>false</gravity> 令模型不受重力，保持悬停。
+  * 位姿由 intruder_driver 通过 Gazebo set_model_state 搬运（可写非被控目标位姿），
+    默认悬停高度 2.0 m（scenario_flat.yaml target_start）。
+  * N6：仅替换 <visual>——由「机身 box + 4 旋翼圆柱」改为 PX4 iris 真实四旋翼网格
+    （meshes/iris.stl 本地自带）。**保持不动**：模型名 intruder_uav、link 名
+    target/base_link、<inertial>、<collision>（0.32×0.32×0.10）、gravity=false。
+  * 缩放/位姿依据（iris.stl 包围盒 x∈[-0.1563,0.1431]、y∈[-0.2371,0.2406]、
+    z∈[-0.0670,0.0466]）：最大水平跨度 0.4777 → scale=0.32/0.4777≈0.670，
+    使外观与 0.32×0.32 碰撞尺寸对齐；pose=(-bbox_center)*scale≈(0.0044,-0.0011,0.0068)
+    使网格包围盒中心与模型原点（悬停点 2.0 m）对齐。
+  * 辨识色：红色（与本体 iris_3d_lidar 的默认深灰区分）。
+-->
+<sdf version="1.6">
+  <model name="intruder_uav">
+    <static>false</static>
+    <gravity>false</gravity>
+    <link name="target/base_link">
+      <inertial>
+        <mass>1.0</mass>
+        <inertia><ixx>0.010</ixx><iyy>0.010</iyy><izz>0.020</izz></inertia>
+      </inertial>
+      <!-- 碰撞体（保持不变；仅用于真值/审计，模型由 set_model_state 搬运） -->
+      <collision name="body_collision">
+        <geometry><box><size>0.32 0.32 0.10</size></box></geometry>
+      </collision>
+      <!-- N6：iris 真实四旋翼网格（仅视觉） -->
+      <visual name="iris_body_visual">
+        <pose>0.0044 -0.0011 0.0068 0 0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>0.670 0.670 0.670</scale>
+            <uri>model://intruder_uav/meshes/iris.stl</uri>
+          </mesh>
+        </geometry>
+        <material>
+          <script>
+            <name>Gazebo/Red</name>
+            <uri>file://media/materials/scripts/gazebo.material</uri>
+          </script>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>

@@ -1,0 +1,85 @@
+# M4 感知仿真传感器通道配置（M0 接口契约 v1.2 第八节；N1 增补视场/距离门控）
+#
+# 说明：本文件描述"真值派生的感知仿真"的观测通道，不是真实传感器标定。
+#   - sigma_xy_m / sigma_z_m：观测噪声标准差；声明 confidence 由
+#     Rayleigh 径向覆盖解析给出：conf = 1 - exp(-tol^2 / (2*sigma_xy^2))，
+#     tol = /agc/calibration/confidence_tolerance_m。
+#   - latency_s：观测延迟（秒），发布的观测 header.stamp 仍为原始观测时刻，
+#     因此消费者看到的观测年龄会随延迟增长（延迟注入即用此项）。
+#   - drop_prob：单拍丢包概率（0~1），在线故障注入可覆盖。
+#   - N1 视场/距离门控（几何，在“原始观测时刻”按无人机位姿判定）：
+#       boresight_body：传感器朝向（机体系单位向量；传感器原点取无人机位置）
+#       hfov_deg / vfov_deg：水平/垂直全视场角（度）
+#       range_min_m / range_max_m：有效距离量程（米）
+#     门控通过才产生该通道的目标/障碍观测；视场外或量程外只记录拒收原因，不产生观测。
+# 各通道使用独立 RNG 流与独立偏置，避免共享真值导致的虚假独立假设。
+#
+# ============================ A0 观测模型扩展（schema v2） ============================
+# 诚实口径：本文件描述"真值派生的感知仿真"，即由 Gazebo 真值加噪/延迟/丢包生成的观测，
+#   非真实视觉/雷达识别，不代表任何真实传感器性能标定。
+# 实现约定：
+#   - 相关噪声不共享随机流：各通道仍用独立 RNG 流采样；通道内相关由 corr_xy 构造，
+#     通道间相关由公共模态( corr_group / corr_rho )加权叠加实现，从而在不共享流的前提下
+#     使各通道误差相关（避免"独立流即独立误差"的虚假假设）。
+#   - 所有新增字段默认取 0/关，启用前默认行为与 N1 逐位等价（不改变现有 RNG 抽样序列）。
+# 新增字段（通道级，全部可选，缺省即默认）：
+#   corr_xy:                通道内 x/y 观测噪声相关系数 ρ∈(-1,1)，0=两轴独立。
+#   corr_group:             通道间公共模态噪声组名（空=不参与公共模态）。
+#   corr_rho:               该通道在公共模态中的权重 ρ_c∈[0,1)，0=不注入公共模态。
+#   noise_tau_s:            观测噪声时间相关常数(s)，AR(1)；0=逐拍独立。
+#   bias_m:                 确定性偏置 [x,y,z]（world 系，m），0=无偏置。
+#   drop_burst_prob:        每拍进入突发丢失态的概率，0=永不进入突发。
+#   drop_burst_mean_s:      突发态平均持续(s)。
+#   drop_burst_mean_gap_s:  正常态平均持续(s)。
+#   drop_group:             跨通道共同丢失组名（空=各通道独立丢失）。
+#   false_alarm_rate_hz:    虚警（幻影目标观测）发生率(Hz)，0=无虚警。
+# 顶层 perception_model 段控制全局观测模型开关（默认全关，保证默认等价）。
+sensors:
+  - id: air_eo_front
+    sigma_xy_m: 0.10
+    sigma_z_m: 0.12
+    latency_s: 0.0
+    drop_prob: 0.0
+    boresight_body: [1.0, 0.0, 0.0]   # 机头前视 EO
+    hfov_deg: 100.0                   # 水平全视场 ±50°
+    vfov_deg: 70.0                    # 垂直全视场 ±35°
+    range_min_m: 0.30
+    range_max_m: 12.0
+    # ---- A0 观测模型字段（默认 0/关，与 N1 逐位等价）----
+    corr_xy: 0.0                # 通道内 x/y 噪声相关系数 ρ∈(-1,1)
+    corr_group: ""              # 通道间公共模态组名（空=不参与）
+    corr_rho: 0.0               # 该通道公共模态权重 ρ_c∈[0,1)
+    noise_tau_s: 0.0            # 噪声时间相关常数(s)，0=逐拍独立
+    bias_m: [0.0, 0.0, 0.0]     # 确定性偏置（world 系，m）
+    drop_burst_prob: 0.0        # 进入突发丢失态概率（每拍）
+    drop_burst_mean_s: 0.5      # 突发态平均持续(s)
+    drop_burst_mean_gap_s: 5.0  # 正常态平均持续(s)
+    drop_group: ""              # 跨通道共同丢失组名（空=独立）
+    false_alarm_rate_hz: 0.0    # 虚警发生率(Hz)
+  - id: air_ir_top
+    sigma_xy_m: 0.20
+    sigma_z_m: 0.25
+    latency_s: 0.0
+    drop_prob: 0.0
+    boresight_body: [1.0, 0.0, -0.10] # 顶部红外云台固定前视（微俯）
+    hfov_deg: 70.0                    # 水平全视场 ±35°
+    vfov_deg: 50.0                    # 垂直全视场 ±25°
+    range_min_m: 0.30
+    range_max_m: 12.0
+    # ---- A0 观测模型字段（默认 0/关，与 N1 逐位等价）----
+    corr_xy: 0.0                # 通道内 x/y 噪声相关系数 ρ∈(-1,1)
+    corr_group: ""              # 通道间公共模态组名（空=不参与）
+    corr_rho: 0.0               # 该通道公共模态权重 ρ_c∈[0,1)
+    noise_tau_s: 0.0            # 噪声时间相关常数(s)，0=逐拍独立
+    bias_m: [0.0, 0.0, 0.0]     # 确定性偏置（world 系，m）
+    drop_burst_prob: 0.0        # 进入突发丢失态概率（每拍）
+    drop_burst_mean_s: 0.5      # 突发态平均持续(s)
+    drop_burst_mean_gap_s: 5.0  # 正常态平均持续(s)
+    drop_group: ""              # 跨通道共同丢失组名（空=独立）
+    false_alarm_rate_hz: 0.0    # 虚警发生率(Hz)
+
+# A0 观测模型全局开关（默认全关，保证默认行为与 N1 逐位等价）
+perception_model:
+  occlusion:
+    enabled: false      # 视线遮挡门控总开关（默认关，保证默认等价）
+    pad_m: 0.0          # 障碍外扩（m），用于遮挡判定

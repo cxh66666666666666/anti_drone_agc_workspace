@@ -3,8 +3,6 @@ float32 battery_voltage
 float32 battery_percentage
 bool gps_status
 bool imu_status
-bool barometer_status
-bool magnetometer_status
 bool esc_status
 string status_message
 uint16 error_code

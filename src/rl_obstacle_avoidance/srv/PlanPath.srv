@@ -1,0 +1,10 @@
+# A* 全局路径规划服务
+# 输入：起点/终点（xy）、安全余量（膨胀半径）
+# 输出：路径点序列（x, y, theta=切向角）
+float64 start_x
+float64 start_y
+float64 goal_x
+float64 goal_y
+float64 safety_margin
+---
+geometry_msgs/Pose2D[] path

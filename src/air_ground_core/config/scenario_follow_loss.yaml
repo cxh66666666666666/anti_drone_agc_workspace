@@ -1,0 +1,28 @@
+scenario_id: follow_loss
+locked: true
+note: "N2 无人机跟随：匀速目标 + 运行期注入目标失联窗口，验证失联冻结与恢复跟随"
+car_start: [-4.0, -3.0, 0.11, 0.0]
+target_start: [3.5, 3.0, 2.0, 0.0]
+drone_start: [0.0, 0.0, 0.0]
+target_motion:
+  mode: linear
+  speed_mps: 0.4
+  waypoints: [[6.0, 4.5]]
+obstacles:
+  - {name: pole_1, pose: [2.5, 0.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+  - {name: pole_2, pose: [4.5, 1.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+map:
+  resolution_m: 0.5
+  size_x_m: 40.0
+  size_y_m: 40.0
+  origin_x: -20.0
+  origin_y: -20.0
+  unknown_is_obstacle: true
+thresholds:
+  approach_radius_m: 3.0
+  hold_window_s: 5.0
+  confidence_min: 0.5
+  search_timeout_s: 60.0
+  approach_timeout_s: 60.0
+  mission_timeout_s: 120.0
+  target_lost_tolerance_s: 2.0

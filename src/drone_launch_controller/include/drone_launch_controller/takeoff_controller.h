@@ -30,9 +30,9 @@ class TakeoffController {
 public:
     /**
      * @brief 构造函数
-     * @param nh ROS节点句柄
      * @param pose_ptr 当前位置指针
      * @param local_pos_pub 本地位置发布器
+     * @param pose_mutex 保护位置指针的互斥锁
      */
     explicit TakeoffController(geometry_msgs::PoseStamped* pose_ptr, ros::Publisher& local_pos_pub, std::mutex& pose_mutex);
 
@@ -90,6 +90,13 @@ public:
      */
     void releaseControl();
 
+    /**
+     * @brief 发布位置设定点：x/y/姿态取自当前位姿，z 取指定高度
+     * @details 供起飞预览（OFFBOARD 预热）与悬停保持共用
+     * @param altitude 目标高度（米）
+     */
+    void publishSetpoint(float altitude);
+
 private:
     /**
      * @brief 起飞循环
@@ -100,12 +107,6 @@ private:
      * @brief 悬停循环
      */
     void hoverMaintainLoop();
-
-    /**
-     * @brief 发布目标高度
-     * @param altitude 目标高度（米）
-     */
-    void publishSetpoint(float altitude);
 
     /**
      * @brief 停止起飞线程

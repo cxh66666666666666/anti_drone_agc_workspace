@@ -1,0 +1,142 @@
+# 空地协同层全局参数（M0 接口契约 v1.2，contract_version=agc-m0-v1.2）
+# 顶层键 agc 对应 ROS 命名空间 /agc，由 launch 用 rosparam load 注入。
+#
+# 注意：scenario_file 不写在本文件内，由 launch 用
+#   <param name="/agc/scenario_file" value="$(find air_ground_core)/config/scenario_flat.yaml"/>
+# 注入，避免把机器相关路径写死进全局参数文件。
+agc:
+  contract_version: "agc-m0-v1.2"
+  frames:
+    world: world
+    air_local: air_local
+    drone: drone/base_link
+    car: car/base_link
+    target: target/base_link
+  gazebo:
+    ns: /gazebo
+    drone_model: iris
+    car_model: agc_car
+    target_model: intruder_uav
+  freshness:
+    odom_max_age_s: 0.5
+    target_max_age_s: 0.5
+    goal_max_age_s: 1.0
+    path_max_age_s: 2.0
+    cmd_max_age_s: 0.2
+    state_max_age_s: 1.5
+    wall_clock_stall_s: 2.0
+  rates:
+    air_odom_hz: 30.0
+    ground_odom_hz: 30.0
+    targets_hz: 10.0
+    map_hz: 2.0
+    # 契约下限 goal ≥5 Hz、path ≥1 Hz、map ≥1 Hz，这里取高于下限的值。
+    # goal 发布由 20 Hz 内部评估节拍分频：5 Hz 会量化成 0.20 s 贴死下限，
+    # 取 10 Hz（2 拍）才有余量。
+    goal_hz: 10.0
+    path_hz: 2.0
+    cmd_hz: 20.0
+    state_hz: 2.0
+    drive_hz: 20.0
+    bridge_hz: 10.0
+  success:
+    approach_radius_m: 3.0
+    hold_window_s: 5.0
+    confidence_min: 0.5
+    acquire_streak_s: 1.0
+  # ---------------- M4 感知与多源融合（契约 v1.2 第八节） ----------------
+  perception:
+    # 真值派生的感知仿真（非真实视觉识别）：sensors_file 由 launch 注入。
+    obs_hz: 20.0
+    tol_m: 0.25            # confidence 定义容限（= calibration.confidence_tolerance_m）
+    # A0 观测模型回退默认（配置文件字段优先；默认关闭，保证与 N1 等价）
+    occlusion_enabled: false
+    occlusion_pad_m: 0.0
+    corr_xy: 0.0
+    noise_tau_s: 0.0
+    drop_burst_prob: 0.0
+    false_alarm_rate_hz: 0.0
+  fusion:
+    hz: 10.0               # 融合输出频率（/agc/targets、/agc/obstacles）
+    target_max_age_s: 0.35 # 严于消费者的 freshness/target_max_age_s 0.5
+    obs_max_age_s: 0.35
+    gate_m: 1.5            # 空间一致性门限：与当前估计距离超过即判离群
+    confidence_min: 0.5    # 分源门槛：低于该 confidence 的观测不入融合
+    min_target_sources: 1  # 至少 N 个 inlier 才输出目标 track
+    obstacle_match_m: 1.0  # 障碍按 obstacle_id 关联
+    obstacle_pad_m: 0.05   # 障碍保守外扩（m）
+    correlated_pad_m: 0.05 # 相关噪声：融合协方差下界（不得按 1/N 缩小）
+    cold_start_min_agree: 2 # N4 冷启动冲突规则：无历史参考时最大簇最少成员数，不足则判歧义、不发高置信目标
+  calibration:
+    # confidence = 位置误差 ≤ 该容限的经验概率
+    confidence_tolerance_m: 0.25
+    coverage_tol_prob: 0.15 # 离线核验：经验覆盖概率与声明 confidence 的允许偏差
+  obstacles:
+    source: scenario       # scenario | air_fusion；由 launch 在 run 前固定覆盖
+  limits:
+    search_timeout_s: 60.0
+    approach_timeout_s: 60.0
+    mission_timeout_s: 120.0
+    target_lost_tolerance_s: 2.0
+    plan_retry_max: 3
+  clearance:
+    # 净空度量：车中心到障碍 OBB 表面的有符号距离（pointObbClearance，内部为负）。
+    # 接触/几何相交判据 = clearance ≤ car_radius_m（不再设单独的碰撞阈值）。
+    car_radius_m: 0.30     # 车体 OBB 0.44×0.34 二维外接圆 sqrt(0.22²+0.17²)=0.2784，取 0.30（含 0.02 裕度）
+    emergency_m: 0.35      # car_radius 0.30 + 单控制步位移(max_linear_speed 1.0/drive_hz 20=0.05)；触发 EMERGENCY_TRIGGER（事件，不改结局）
+    protection_m: 0.80     # car_radius 0.278 + 地图量化误差(resolution/√2=0.354) + 单控制步 0.05 + 裕度 0.10；触发 CLEARANCE_VIOLATION（事件，不改结局）
+  planner:
+    replan_displacement_m: 1.0
+    replan_period_s: 2.0
+    inflation_m: 0.30
+    goal_adjust_max_m: 1.0  # N3 目标格可行化搜索半径：目标格被阻塞时就近取可行格（不降低 protection）
+    grid_resolution_m: 0.5
+    grid_size_x_m: 40.0
+    grid_size_y_m: 40.0
+    grid_origin_x: -20.0
+    grid_origin_y: -20.0
+    unknown_is_obstacle: true
+  commander:
+    max_linear_speed_mps: 1.0
+    max_angular_speed_radps: 1.2
+    goal_stop_distance_m: 0.30
+    goal_tolerance_m: 0.50
+  drive:
+    backend: kinematic_sim
+    start_x: -4.0
+    start_y: -3.0
+    start_z: 0.11
+    start_yaw: 0.0
+    # M5 写入权核查：任务运行期唯一写车位姿者为 ground_drive_adapter。
+    # 复位换序（/agc/reset/epoch 变化）后 1.0 s 内只重同步不判冲突；
+    # 其余时段实际车位姿突跳 > max(0.30, 本步位移+0.10) 连续 3 拍判外部写入。
+    external_write_jump_m: 0.30
+    external_write_consecutive: 3
+    resync_holdoff_s: 1.0
+  target:
+    id: intruder_uav
+    default_height_m: 2.0
+  air:
+    takeoff_altitude_m: 2.0
+    setpoint_gap_max_s: 0.2
+    hold_position_tolerance_m: 0.75
+    # N2 无人机跟随移动目标（安全距离带；enabled 由 launch/脚本 --follow 开启，默认关闭）
+    follow:
+      enabled: false
+      safe_min_m: 2.0      # 过近退离：水平距离小于此值退离到该值
+      safe_max_m: 3.5      # 过远跟近：水平距离大于此值跟近到该值
+      hysteresis_m: 0.3    # 带边界滞回，避免持续摆动
+      altitude_m: 2.0      # 跟随高度（与起飞高度一致）
+      ref_max_age_s: 0.5   # 目标观测新鲜度上限，超过视为失联（冻结不追）
+      confidence_min: 0.5  # 目标置信度门槛
+      max_step_m: 0.6      # 参考每拍最大前进量（同时限幅参考跳变）；0.6@20Hz≈12 m/s 上限
+      rate_hz: 20.0
+  reset:
+    max_retries: 3
+  start:
+    # 复位内部会调用 /agc/air/recalibrate 并清空 odom_valid；门禁在复位后复核 odom，
+    # 该项为重标定恢复有效的等待上限（秒），超时按门禁不通过处理。
+    odom_recheck_timeout_s: 3.0
+  log:
+    root: /home/ubuntu/anti_drone_agc_workspace/experiments/agc_runs
+    seed: unseeded

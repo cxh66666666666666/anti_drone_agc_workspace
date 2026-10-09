@@ -7,7 +7,7 @@
 # ============================================================
 # 1. 控制参数
 # ============================================================
-# 轨迹类型: linear | circular | helical | fixed_horizontal | step
+# 轨迹类型: linear | circular | helical | fixed_horizontal | figure_eight | step
 trajectory_type: "linear"
 
 # 轨迹总时长 [秒]
@@ -16,9 +16,15 @@ trajectory_duration: 30.0
 # 控制频率 [Hz]
 control_rate: 50.0
 
+# 曲线路径避障使用的未来轨迹切线时间 [秒]
+avoidance_lookahead_time: 2.0
+
 # RL 局部 offset 用于短时避障；默认不额外转成速度前馈，避免 offset 造成冲飞
 rl_velocity_gain: 0.0
 max_rl_velocity: 1.0
+
+# 位置设定点提前时间 [秒]；默认值由节点保持为一个控制周期
+position_lead_time: 0.02
 
 
 # ============================================================
@@ -73,7 +79,7 @@ angular_velocity: 10
 
 
 # ============================================================
-# 5. 固定水平8字形轨迹参数 (trajectory_type=fixed_horizontal)
+# 5. 历史固定水平跑道形轨迹参数 (trajectory_type=fixed_horizontal)
 # ============================================================
 # 左圆圆心 [m]
 fixed_horizontal_left_x: -3.0
@@ -91,6 +97,14 @@ fixed_horizontal_height: 2.0
 
 # 角速度 [rad/s]（较低速度：线速度 = ω × radius ≈ 0.6 m/s）
 fixed_horizontal_angular_velocity: 0.2
+
+# 真正的 Gerono 水平八字轨迹 (trajectory_type=figure_eight)
+figure_eight_center_x: 0.0
+figure_eight_center_y: 0.0
+figure_eight_radius_x: 5.0
+figure_eight_radius_y: 3.0
+figure_eight_height: 2.0
+figure_eight_angular_velocity: 0.2
 
 
 # ============================================================

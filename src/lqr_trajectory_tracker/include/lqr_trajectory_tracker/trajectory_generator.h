@@ -14,18 +14,7 @@
 namespace lqr_trajectory_tracker {
 
 /**
- * @brief 轨迹类型枚举
- */
-enum class TrajectoryType {
-    LINEAR,
-    CIRCULAR,
-    HELICAL,
-    FIXED_HORIZONTAL,
-    STEP  // 悬停轨迹：保持固定位置，零速度，供 RL 训练使用
-};
-
-/**
- * @brief 固定水平8字形轨迹参数结构体
+ * @brief 历史固定水平跑道形轨迹参数结构体
  */
 struct FixedHorizontalParams {
     double left_center_x = -3.0;
@@ -35,6 +24,15 @@ struct FixedHorizontalParams {
     double radius = 3.0;
     double height = 2.0;
     double angular_velocity = 0.1;  // 较低速度: 线速度 = 0.1 * radius ≈ 0.3 m/s
+};
+
+struct FigureEightParams {
+    double center_x = 0.0;
+    double center_y = 0.0;
+    double radius_x = 5.0;
+    double radius_y = 3.0;
+    double height = 2.0;
+    double angular_velocity = 0.2;
 };
 
 /**
@@ -113,14 +111,19 @@ public:
         double dt);
 
     /**
-     * @brief 生成固定水平8字形轨迹
-     * @param params 固定水平8字形轨迹参数
+     * @brief 生成历史固定水平跑道形轨迹
+     * @param params 固定水平跑道形轨迹参数
      * @param duration 轨迹持续时间
      * @param dt 时间步长
-     * @return std::vector<TrajectoryPoint> 固定水平8字形轨迹点向量
+     * @return std::vector<TrajectoryPoint> 固定水平跑道形轨迹点向量
      */
     std::vector<TrajectoryPoint> generateFixedHorizontalTrajectory(
         const FixedHorizontalParams& params,
+        double duration,
+        double dt);
+
+    std::vector<TrajectoryPoint> generateFigureEightTrajectory(
+        const FigureEightParams& params,
         double duration,
         double dt);
 
@@ -134,6 +137,18 @@ public:
     std::vector<TrajectoryPoint> generateStepTrajectory(
         const Eigen::Vector3d& position,
         double duration,
+        double dt);
+
+    /**
+     * @brief 生成航点轨迹（按弧长等速重采样）
+     * @param waypoints 航点序列（含高度）
+     * @param speed 巡航速度
+     * @param dt 时间步长
+     * @return std::vector<TrajectoryPoint> 航点轨迹点向量
+     */
+    std::vector<TrajectoryPoint> generateWaypointTrajectory(
+        const std::vector<Eigen::Vector3d>& waypoints,
+        double speed,
         double dt);
 
     /**

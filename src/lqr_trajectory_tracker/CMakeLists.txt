@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   mavros_msgs
   std_srvs
+  visualization_msgs
 )
 
 find_package(Eigen3 REQUIRED)
@@ -20,6 +21,7 @@ catkin_package(
     nav_msgs
     mavros_msgs
     std_srvs
+    visualization_msgs
   DEPENDS
     EIGEN3
 )
@@ -53,10 +55,6 @@ install(TARGETS lqr_tracker_node
 
 install(DIRECTORY launch/
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
-)
-
-install(DIRECTORY worlds/
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/worlds
 )
 
 install(DIRECTORY include/${PROJECT_NAME}/

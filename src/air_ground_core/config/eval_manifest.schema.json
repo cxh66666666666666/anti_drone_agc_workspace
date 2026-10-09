@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "eval_manifest.schema.json",
+  "title": "AGC stage3 D eval manifest",
+  "description": "由 d1_scenario_gen.py 生成的场景清单；条目可由同一主种子确定性重建。",
+  "type": "object",
+  "required": ["manifest_version", "protocol", "master_seed", "created_from", "generated_at", "entries"],
+  "additionalProperties": false,
+  "properties": {
+    "manifest_version": { "type": "string" },
+    "protocol": { "type": "string" },
+    "master_seed": { "type": "integer" },
+    "created_from": { "type": "string" },
+    "generated_at": { "type": "string" },
+    "config_hash": { "type": "string" },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["scenario_id", "split", "family", "seed", "scenario_file", "scenario_hash", "sensors_file", "sensors_hash", "world_file", "world_hash", "params"],
+        "additionalProperties": false,
+        "properties": {
+          "scenario_id": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+$" },
+          "split": { "type": "string", "enum": ["train", "validation", "test"] },
+          "family": { "type": "string" },
+          "seed": { "type": "integer" },
+          "scenario_file": { "type": "string" },
+          "scenario_hash": { "type": "string" },
+          "sensors_file": { "type": "string" },
+          "sensors_hash": { "type": "string" },
+          "world_file": { "type": "string" },
+          "world_hash": { "type": "string" },
+          "layout": { "type": ["string", "null"] },
+          "target_source": { "type": "string", "enum": ["gt_adapter", "air_fusion"] },
+          "obstacle_source": { "type": "string", "enum": ["scenario", "air_fusion"] },
+          "inject": {
+            "type": ["object", "null"],
+            "properties": {
+              "mode": { "type": "string" },
+              "sensor": { "type": "string" },
+              "value": { "type": ["number", "string", "null"] },
+              "delay_s": { "type": "number" }
+            }
+          },
+          "pair_id": { "type": ["string", "null"] },
+          "params": {
+            "type": "object",
+            "properties": {
+              "target_motion_mode": { "type": "string" },
+              "target_speed_mps": { "type": "number" },
+              "num_obstacles": { "type": "integer" },
+              "intended_unreachable": { "type": "boolean" },
+              "boundary": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

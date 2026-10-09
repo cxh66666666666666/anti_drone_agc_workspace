@@ -1,0 +1,93 @@
+{
+  "purpose": "Targeted prior-art check for publication_plan v3; not an exhaustive literature review.",
+  "items": [
+    {
+      "source": "arXiv Atom API",
+      "url": "https://arxiv.org/abs/2604.26836v3",
+      "title": "Uncertainty-Aware Predictive Safety Filters for Probabilistic Neural Network Dynamics",
+      "authors": [
+        "Bernd Frauenknecht",
+        "Lukas Kesper",
+        "Daniel Mayfrank",
+        "Henrik Hose",
+        "Sebastian Trimpe"
+      ],
+      "published": "2026-04-29T16:01:59Z",
+      "updated": "2026-08-10T09:35:53Z",
+      "abstract": "Predictive safety filters (PSFs) leverage model predictive control to enforce constraint satisfaction during deep reinforcement learning (RL) exploration, yet their reliance on first-principles models or Gaussian processes limits scalability and broader applicability. Meanwhile, model-based RL (MBRL) methods routinely employ probabilistic ensemble (PE) neural networks to capture complex, high-dimensional dynamics from data with minimal prior knowledge. However, existing attempts to integrate PEs into PSFs lack rigorous uncertainty quantification. We introduce the Uncertainty-Aware Predictive Safety Filter (UPSi), a PSF that provides rigorous safety verification using PE dynamics models by formulating future outcomes as reachable sets. UPSi introduces an explicit certainty constraint that prevents model exploitation and integrates seamlessly into common MBRL frameworks. We evaluate UPSi under practical simplifications within Dyna-style MBRL on standard safe RL benchmarks and report substantial improvements in exploration safety over prior neural network PSFs while maintaining performance on par with standard MBRL. UPSi bridges the gap between the scalability and generality of modern MBRL and the safety guarantees of predictive safety filters.",
+      "checked_at": "2026-09-24",
+      "review_depth": "official abstract only"
+    },
+    {
+      "source": "arXiv Atom API",
+      "url": "https://arxiv.org/abs/2603.00338v2",
+      "title": "Layered Safety: Enhancing Autonomous Collision Avoidance via Multistage CBF Safety Filters",
+      "authors": [
+        "Erina Yamaguchi",
+        "Ryan M. Bena",
+        "Gilbert Bahati",
+        "Aaron D. Ames"
+      ],
+      "published": "2026-02-27T22:19:45Z",
+      "updated": "2026-09-10T21:06:57Z",
+      "abstract": "This paper presents a general end-to-end framework for constructing robust and reliable layered safety filters that can be leveraged to perform dynamic collision avoidance over a broad range of applications using only local perception data. Given a robot-centric point cloud, we begin by constructing an occupancy map which is used to synthesize a Poisson safety function (PSF). The resultant PSF is employed as a control barrier function (CBF) within two distinct safety filtering stages. In the first stage, we propose a predictive safety filter to compute optimal safe trajectories based on nominal potentially-unsafe commands. The resultant short-term plans are constrained to satisfy the CBF condition along a finite prediction horizon. In the second stage, instantaneous velocity commands are further refined by a real-time CBF-based safety filter and tracked by the full-order low-level robot controller. Assuming accurate tracking of velocity commands, we obtain formal guarantees of safety for the full-order system. We validate the optimality and robustness of our multistage architecture, in comparison to traditional single-stage safety filters, via a detailed Pareto analysis. We further demonstrate the effectiveness and generality of our collision avoidance methodology on multiple legged robot platforms across a variety of real-world dynamic scenarios.",
+      "checked_at": "2026-09-24",
+      "review_depth": "PDF text: model, assumptions, method and relevant discussion excerpts",
+      "pdf_sha256": "ee68d1445b7729c9ef4fcefdf2db62626cb963cdfeca0a06c41b59ba9e9c8afa"
+    },
+    {
+      "source": "arXiv Atom API",
+      "url": "https://arxiv.org/abs/2409.13817v1",
+      "title": "Differentiable Predictive Control for Robotics: A Data-Driven Predictive Safety Filter Approach",
+      "authors": [
+        "John Viljoen",
+        "Wenceslao Shaw Cortez",
+        "Jan Drgona",
+        "Sebastian East",
+        "Masayoshi Tomizuka",
+        "Draguna Vrabie"
+      ],
+      "published": "2024-09-20T18:00:08Z",
+      "updated": "2024-09-20T18:00:08Z",
+      "abstract": "Model Predictive Control (MPC) is effective at generating safe control strategies in constrained scenarios, at the cost of computational complexity. This is especially the case in robots that require high sampling rates and have limited computing resources. Differentiable Predictive Control (DPC) trains offline a neural network approximation of the parametric MPC problem leading to computationally efficient online control laws at the cost of losing safety guarantees. DPC requires a differentiable model, and performs poorly when poorly conditioned. In this paper we propose a system decomposition technique based on relative degree to overcome this. We also develop a novel safe set generation technique based on the DPC training dataset and a novel event-triggered predictive safety filter which promotes convergence towards the safe set. Our empirical results on a quadcopter demonstrate that the DPC control laws have comparable performance to the state-of-the-art MPC whilst having up to three orders of magnitude reduction in computation time and satisfy safety requirements in a scenario that DPC was not trained on.",
+      "checked_at": "2026-09-24",
+      "review_depth": "official abstract only"
+    },
+    {
+      "source": "arXiv Atom API",
+      "url": "https://arxiv.org/abs/2309.00189v1",
+      "title": "Data-Driven Safety Filter: An Input-Output Perspective",
+      "authors": [
+        "Mohammad Bajelani",
+        "Klaske van Heusden"
+      ],
+      "published": "2023-09-01T01:07:30Z",
+      "updated": "2023-09-01T01:07:30Z",
+      "abstract": "Implementation of learning-based control remains challenging due to the absence of safety guarantees. Safe control methods have turned to model-based safety filters to address these challenges, but this is paradoxical when the ultimate goal is a model-free, data-driven control solution. Addressing the core question of \"Can we ensure the safety of any learning-based algorithm without explicit prediction models and state estimation?\" this paper proposes a Data-Driven Safety Filter (DDSF) grounded in Behavioral System Theory (BST). The proposed method needs only a single system trajectory available in an offline dataset to modify unsafe learning inputs to safe inputs. This contribution addresses safe control in the input-output framework and therefore does not require full state measurements or explicit state estimation. Since no explicit model is required, the proposed safe control solution is not affected by unmodeled dynamics and unstructured uncertainty and can provide a safe solution for systems with unknown time delays. The effectiveness of the proposed DDSF is illustrated in simulation for a high-order six-degree-of-freedom aerial robot and a time-delay adaptive cruise control system.",
+      "checked_at": "2026-09-24",
+      "review_depth": "PDF text: model, assumptions, method and relevant discussion excerpts",
+      "pdf_sha256": "9958fdcab238a60f7725cf722e264b15dba7d56dc0a947f3b9429932a08dd126"
+    },
+    {
+      "source": "Crossref REST API",
+      "checked_at": "2026-09-24",
+      "title": [
+        "Data-Driven Safety Filter: An Input-Output Perspective"
+      ],
+      "DOI": "10.23919/acc60939.2024.10644850",
+      "published": {
+        "date-parts": [
+          [
+            2024,
+            7,
+            10
+          ]
+        ]
+      },
+      "container-title": [
+        "2024 American Control Conference (ACC)"
+      ],
+      "review_depth": "bibliographic metadata only"
+    }
+  ]
+}

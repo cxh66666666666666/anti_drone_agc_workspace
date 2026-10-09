@@ -13,6 +13,7 @@ namespace drone_launch_controller {
  * @brief 构造函数
  * @param nh ROS节点句柄
  * @param takeoff_controller 无人机起飞控制器指针
+ * @param state_ptr MAVROS状态指针
  */
 FlightStatusPublisher::FlightStatusPublisher(ros::NodeHandle& nh, TakeoffController* takeoff_controller,
                                            const mavros_msgs::State* state_ptr)
@@ -69,31 +70,11 @@ void FlightStatusPublisher::stopPublishing() {
  */
 void FlightStatusPublisher::publishTimerCallback(const ros::TimerEvent& event) 
 {
-    float current_alt = 0.0f;
-    FlightState state = INIT;
-    if (takeoff_controller_ != nullptr) 
-    {
-        current_alt = takeoff_controller_->getCurrentAltitude();
-        state = takeoff_controller_->getCurrentState();
-    }
-
     drone_launch_controller::FlightStatus msg;
-    if (state_ptr_ != nullptr) 
-    {
-        msg.flight_mode = state_ptr_->mode;
-        msg.armed = state_ptr_->armed ? 1 : 0;
-    }
-    else
-    {
-        msg.flight_mode = "";
-        msg.armed = 0;
-    }
-    msg.current_altitude = current_alt;
-    msg.target_altitude = 0.0f;
-    msg.latitude = 0.0f;
-    msg.longitude = 0.0f;
-    msg.state = static_cast<uint8_t>(state);
-    msg.message = "";
+    msg.flight_mode = state_ptr_->mode;
+    msg.armed = state_ptr_->armed ? 1 : 0;
+    msg.current_altitude = takeoff_controller_->getCurrentAltitude();
+    msg.state = static_cast<uint8_t>(takeoff_controller_->getCurrentState());
     status_pub_.publish(msg);
 }
 

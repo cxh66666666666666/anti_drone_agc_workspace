@@ -69,18 +69,6 @@ void DroneLaunchControllerNode::localPosCallback(const geometry_msgs::PoseStampe
 }
 
 /**
- * @brief 发布无人机目标位置
- * @param pose 无人机目标位置
- */
-void DroneLaunchControllerNode::publishSetpoint(const geometry_msgs::PoseStamped& pose) 
-{
-    geometry_msgs::PoseStamped setpoint = pose;
-    setpoint.header.stamp = ros::Time::now();
-    setpoint.header.frame_id = "map";
-    local_pos_pub_.publish(setpoint);
-}
-
-/**
  * @brief 发送无人机目标位置前的预热
  * @param duration_seconds 预热持续时间（秒）
  * @param rate_hz 预热频率（Hz）
@@ -101,7 +89,8 @@ bool DroneLaunchControllerNode::sendSetpointsBeforeOffboard(double duration_seco
     
     for (int i = 0; i < num_setpoints && ros::ok(); ++i) 
     {
-        publishSetpoint(current_pose_);
+        // 预热阶段保持当前位置（z 取当前高度，即悬停在原处）
+        takeoff_controller_.publishSetpoint(takeoff_controller_.getCurrentAltitude());
         ros::spinOnce();
         rate.sleep();
     }
@@ -111,10 +100,29 @@ bool DroneLaunchControllerNode::sendSetpointsBeforeOffboard(double duration_seco
 }
 
 /**
- * @brief 禁用无人机的RTL和RC失败安全
- * @return true：成功，false：失败
+ * @brief 在指定时长内按频率持续发布 setpoint（避免 OFFBOARD 因 setpoint 空窗掉出）
+ * @details 起飞窗口内切 OFFBOARD、解锁电机后的等待若静默超过 PX4 失效保护阈值
+ *          （约 0.5 s），会触发 OFFBOARD -> AUTO.LAND -> OFFBOARD 抖动（M1 遗留项 2）。
+ *          等待期间保持 20 Hz setpoint 流即可消除该空窗，控制律与目标不变。
  */
-bool DroneLaunchControllerNode::disableRTLAndFailsafe() 
+void DroneLaunchControllerNode::publishSetpointsFor(double duration_seconds, double rate_hz)
+{
+    if (duration_seconds <= 0.0 || rate_hz <= 0.0) return;
+    ros::Rate rate(rate_hz);
+    const int n = static_cast<int>(duration_seconds * rate_hz);
+    for (int i = 0; i < n && ros::ok(); ++i)
+    {
+        takeoff_controller_.publishSetpoint(takeoff_controller_.getCurrentAltitude());
+        ros::spinOnce();
+        rate.sleep();
+    }
+}
+
+/**
+ * @brief 禁用无人机的RTL和RC失败安全
+ * @details 逐个设置 PX4 参数，任一失败仅告警，不影响后续流程
+ */
+void DroneLaunchControllerNode::disableRTLAndFailsafe() 
 {
     ROS_INFO("[PX4 Config] 开始禁用RTL失败安全和RC失败安全...");
     
@@ -127,11 +135,11 @@ bool DroneLaunchControllerNode::disableRTLAndFailsafe()
     {
         if (param_set.response.success) 
         {
-            ROS_INFO("[PX4 Config] RTL失败安全已禁用");
+            ROS_INFO("[PX4 Config] RC失败安全已禁用");
         } 
         else 
         {
-            ROS_WARN("[PX4 Config] 失败禁用RTL失败安全");
+            ROS_WARN("[PX4 Config] 失败禁用RC失败安全");
         }
     } 
     else 
@@ -147,12 +155,16 @@ bool DroneLaunchControllerNode::disableRTLAndFailsafe()
     {
         if (param_set.response.success) 
         {
-            ROS_INFO("[PX4 Config] RC失败安全已禁用");
+            ROS_INFO("[PX4 Config] 数据链失败安全已禁用");
         } 
         else 
         {
-            ROS_WARN("[PX4 Config] 失败禁用RC失败安全");
+            ROS_WARN("[PX4 Config] 失败禁用数据链失败安全");
         }
+    } 
+    else 
+    {
+        ROS_WARN("[PX4 Config] 调用param/set服务失败");
     }
     
     param_set.request.param_id = "COM_RCL_EXCEPT";
@@ -169,10 +181,13 @@ bool DroneLaunchControllerNode::disableRTLAndFailsafe()
         {
             ROS_WARN("[PX4 Config] 失败设置允许在无RC下起飞");
         }
+    } 
+    else 
+    {
+        ROS_WARN("[PX4 Config] 调用param/set服务失败");
     }
     
     ros::Duration(0.5).sleep();
-    return true;
 }
 
 /**
@@ -195,6 +210,10 @@ bool DroneLaunchControllerNode::waitForOffboardMode(double timeout_seconds)
             ROS_INFO("[Offboard Mode] 已确认进入OFFBOARD模式");
             return true;
         }
+
+        // 切模式期间必须保持 setpoint 流连续：OFFBOARD 依赖连续 setpoint，
+        // 静默超过 0.5 s 会触发 PX4 失效保护（曾观察到 OFFBOARD -> AUTO.LAND）。
+        takeoff_controller_.publishSetpoint(takeoff_controller_.getCurrentAltitude());
         
         ros::Duration elapsed = ros::Time::now() - start;
         if (elapsed.toSec() > timeout_seconds) 
@@ -232,7 +251,8 @@ bool DroneLaunchControllerNode::setOffboardMode(int max_retries)
                 ROS_INFO("[Offboard Mode] 模式切换请求已发送，等待确认...");
                 if (waitForOffboardMode(3.0)) 
                 {
-                    ros::Duration(0.5).sleep();
+                    // 等待期间继续发 setpoint，避免 OFFBOARD 因空窗掉出（M1 遗留项 2）
+                    publishSetpointsFor(0.5, 20.0);
                     return true;
                 }
                 ROS_WARN("[Offboard Mode] 模式切换请求已发送，但未改变模式");
@@ -250,7 +270,14 @@ bool DroneLaunchControllerNode::setOffboardMode(int max_retries)
         if (attempt < max_retries) 
         {
             ROS_INFO("[Offboard Mode] 1秒后重试...");
-            ros::Duration(1.0).sleep();
+            // 重试等待期间继续发布 setpoint，避免 OFFBOARD 因 setpoint 空窗掉出
+            ros::Rate retry_rate(20);
+            for (int i = 0; i < 20 && ros::ok(); ++i) 
+            {
+                takeoff_controller_.publishSetpoint(takeoff_controller_.getCurrentAltitude());
+                ros::spinOnce();
+                retry_rate.sleep();
+            }
         }
     }
     
@@ -292,7 +319,8 @@ bool DroneLaunchControllerNode::armMotorsWithCheck() {
         if (arm_cmd.response.success) 
         {
             ROS_INFO("[Arming] 电机已成功启动");
-            ros::Duration(0.5).sleep();
+            // 解锁后的等待同样保持 setpoint 流，避免 OFFBOARD 掉出（M1 遗留项 2）
+            publishSetpointsFor(0.5, 20.0);
             return true;
         } 
         else 
@@ -319,6 +347,9 @@ bool DroneLaunchControllerNode::takeoffCallback(drone_launch_controller::Takeoff
 {
     ROS_INFO("========================================");
     ROS_INFO("[Takeoff] 起飞服务被调用");
+
+    // N4：若上一次已释放并 shutdown，此处重新 advertise setpoint（同节点同话题为幂等）
+    local_pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
 
     res.success = false;
     res.result = 0;
@@ -446,14 +477,16 @@ bool DroneLaunchControllerNode::healthCheckCallback(drone_launch_controller::Dro
 
 /**
  * @brief 处理解锁电机服务回调
- * @param req 服务请求
- * @param res 服务响应
+ * @param res 解锁电机响应
  * @return true：成功，false：失败
  */
-bool DroneLaunchControllerNode::armMotorsCallback(drone_launch_controller::ArmMotors::Request& req,
+bool DroneLaunchControllerNode::armMotorsCallback(drone_launch_controller::ArmMotors::Request&,
                        drone_launch_controller::ArmMotors::Response& res) 
 {
-    ROS_INFO("[Arm Service] 启动电机服务被调用, (force: %s)", req.force ? "true" : "false");
+    ROS_INFO("[Arm Service] 启动电机服务被调用");
+
+    // N4：若上一次已释放并 shutdown，此处重新 advertise setpoint（同节点同话题为幂等）
+    local_pos_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/mavros/setpoint_position/local", 10);
 
     res.success = false;
     res.result = 0;
@@ -529,6 +562,8 @@ bool DroneLaunchControllerNode::releaseControlCallback(std_srvs::Trigger::Reques
 {
     ROS_INFO("[ReleaseControl] 收到释放控制权请求");
     takeoff_controller_.releaseControl();
+    // N4：释放控制权后关闭 setpoint advertiser，使发布者列表与实际发布者一致（M5 未决1）
+    local_pos_pub_.shutdown();
     res.success = true;
     res.message = "控制权已释放";
     return true;

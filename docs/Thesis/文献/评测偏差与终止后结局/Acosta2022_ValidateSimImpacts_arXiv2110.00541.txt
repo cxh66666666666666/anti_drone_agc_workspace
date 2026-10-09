@@ -1,0 +1,541 @@
+                                                                                                                                                                                                        1
+
+
+
+
+                                                  Validating Robotics Simulators on Real-World
+                                                                     Impacts
+                                                                                    Brian Acosta*, William Yang*, and Michael Posa
+
+
+
+
+                                            Abstract—A realistic simulation environment is an essential
+                                         tool in every roboticist’s toolkit, with uses ranging from planning
+                                         and control to training policies with reinforcement learning.
+                                         Despite the centrality of simulation in modern robotics, little
+                                         work has been done comparing robotics simulators against real-
+arXiv:2110.00541v3 [cs.RO] 14 Jul 2022
+
+
+
+
+                                         world data, especially for scenarios involving dynamic motions
+                                         with high speed impact events. Handling dynamic contact is
+                                         the computational bottleneck for most simulations, and thus
+                                         the modeling and algorithmic choices surrounding impacts and
+                                         friction form the largest distinctions between popular tools. Here,
+                                         we evaluate the ability of several simulators to reproduce real-
+                                         world trajectories involving impacts. Using experimental data, we
+                                         identify system-specific contact parameters of popular simulators
+                                         Drake, MuJoCo, and Bullet, analyzing the effects of modeling
+                                         choices around these parameters. For the simple example of a
+                                         cube tossed onto a table, simulators capture inelastic impacts
+                                         surprisingly well, though generally fail to reproduce elasticity.
+                                         For the higher-dimensional case of a Cassie biped landing from
+                                         a jump, the simulators capture the bulk motion well but the
+                                         accuracy is limited by model differences between the real robot
+                                         and the simulators.
+                                           Index Terms—Contact Modeling, Simulation and Animation,
+                                         Dynamics
+
+                                                                                                                            Fig. 1. Athletic behaviors such as jumping (right) involve high speed impacts
+                                                                    I. I NTRODUCTION                                        which are difficult to model and simulate. Yet, optimal performance of
+                                                                                                                            controllers which are trained or verified in simulation relies on such impacts
+                                             Given the importance of simulation in planning and control,                    being faithfully captured by simulators. In this work, we evaluate simulators’
+                                         it is important to understand the physical realism of simulated                    ability to capture impact dynamics using real-world data from Cassie jumping
+                                         impacts. Recent successes in sim-to-real reinforcement learn-                      and a cube tossed onto a wooden table.
+                                         ing for legged locomotion [1], [2], [3] largely use domain
+                                         randomization to mitigate model uncertainties. However, do-
+                                         main randomization works best when the range of randomized                         important step in applying these techniques to more impact-
+                                         model parameters is small, and non-randomized dynamics are                         rich behaviors.
+                                         accurate. Contact parameters other than friction are rarely                           Most common robotics simulators use approximately rigid
+                                         randomized, suggesting accurate impact simulation could be                         contact models [7], [8], with specific approximations chosen
+                                         a contributing factor in successful sim-to-real transfer. Im-                      for the sake of computational speed and numerical stability.
+                                         pact simulation accuracy also affects the ability to accurately                    The physical realism of these contact models are largely
+                                         compute regions of attractions for legged robot control [4]                        validated by visual inspection or by tangential physical metrics
+                                         and verify the robustness of impact-aware control techniques                       [9], and there is evidence that rigid contact models sometimes
+                                         [5], [6] without risking failure. Understanding which impact                       poorly predict the dynamics of real collisions even for single
+                                         behaviors can be recreated in popular robotics simulators is an                    impacts [10], [11]. Follow up work on improving the predic-
+                                                                                                                            tion ability of rigid body models with residual learning [12]
+                                           This material is based upon work supported by the National Science               demonstrates some success, though recent work suggests that
+                                         Foundation Graduate Research Fellowship Program under Grant No. DGE-
+                                         1845298. Toyota Research Institute also provided funds to support this work.
+                                                                                                                            stiff contact behavior may lead to poor amenability to learning
+                                           *These authors contributed equally. Names are in alphabetical order.             based techniques [13].
+                                           The authors are with the GRASP Laboratory, University of Penn-                      While simulators may be able to accurately capture real
+                                         sylvania, Philadelphia, PA 19104, USA {bjacosta, yangwill,
+                                         posa}@seas.upenn.edu                                                               impacts if tuned to a correct set of parameters, roboticists
+                                           © 2022 IEEE. Personal use of this material is permitted. Permission from         often choose contact parameters such as stiffness to maximize
+                                         IEEE must be obtained for all other uses, in any current or future media,          simulation speed and may only be peripherally aware of
+                                         including reprinting/republishing this material for advertising or promotional
+                                         purposes, creating new collective works, for resale or redistribution to servers   the tradeoffs being made with physical realism. As part of
+                                         or lists, or reuse of any copyrighted component of this work in other works        this paper, we examine the consequences of this approach
+2
+
+
+
+by conducting a sensitivity analysis of simulators’ physical          2) MuJoCo: MuJoCo uses a convex approximation of rigid
+realism to the contact parameters.                                 contact first introduced in [17] with regularization introduced
+   The primary contributions of this work are:                     in [18]. This regularization softens contact by relaxing the
+   • Empirical evaluation of multiple simulators on complex        strict complementary of contact force and distance between
+      3D impacts using real world data collected from cube         objects. The amount of regularization is determined by user
+      tosses and jumping with a bipedal robot.                     specified stiffness and damping parameters, which are trans-
+   • Identification of optimal contact parameters for each         formed internally into reference accelerations for the contact
+      system in Drake, MuJoCo, and Bullet and sensitivity          constraint dynamics, which approximately obey the following
+      analysis to assess the importance of properly specifying     linear spring-damper law 1 :
+      each parameter.
+                                                                                 an ≈ (−kδ − bδ̇)d(δ) + (1 − d(δ))a0 ,           (2)
+   • Analysis of the relative strengths and weaknesses of each
+      simulator when applied to the given scenarios.               where an is the normal acceleration, a0 is the acceleration in
+   • A publicly available dataset containing Cassie jumping        the absence of contact, and d(δ) ≈ 1 is a position-dependent
+      trajectories.                                                interpolation between the constrained and unconstrained ac-
+                                                                   celeration. MuJoCo allows for tuning the shape of d, though
+                      II. BACKGROUND                               the results presented here use the default values, as we find
+   The forward simulation of rigid body motion without con-        no improvement in the prediction error by tuning d. MuJoCo
+tact is assumed to be identical across all three simulators. For   implements friction by solving a convex optimization problem
+this reason, this paper focuses on the predictive fidelity of      which balances achieving the constraint dynamics in (2) with
+simulator contact models when the system undergoes impact.         contact activation and energy dissipation.
+Contact models define a mathematical relationship between             This convex formulation guarantees a unique solution
+the relative position and velocity of two rigid bodies and the     at each time step and yields fast, differentiable computa-
+contact force between them. Rigid contact models assume that       tions. This speed has made MuJoCo a popular simulator in
+bodies are perfectly rigid (i.e. infinite stiffness) and undergo   the robotics community, especially among RL practitioners,
+inelastic collisions, which can be posed as a linear complemen-    though MuJoCo’s contact constraint regularization has been
+tarity problem (LCP) [7]. Compliant models acknowledge that        observed to cause non-physical artifacts during slip. Objects
+real objects experience some deformation during contact, and       can glide at a distance from each other [19], and large amounts
+approximate the inter-body forces produced by deformation as       of regularization can lead to viscous slip [20], requiring the use
+a restoring force against the interpenetration of objects. The     of additional stabilization techniques. Like Drake, after posing
+constitutive laws of compliant contact models are numerically      its regularized dynamics problem, MuJoCo is guaranteed to
+stiff, requiring the use of small time steps, while solving LCPs   find an accurate solution to this problem.
+is computationally expensive. Therefore, simulators take dif-         3) Bullet: Bullet is a physics engine originally introduced
+ferent approaches to improving simulation speed by choosing        for simulation in computer graphics and animation but widely
+approximations and/or solution tactics. The following section      used for robotics simulations. Bullet formulates the contact
+details the contact model and solution strategy for each of the    problem as a mixed LCP (MLCP), a generalization of the
+chosen simulators, which represent three distinct strategies for   LCP which allows for inequality constraints. Bullet’s MLCP
+modeling and solving for contact forces.                           represents rigid contact with Coulomb friction, and is solved
+                                                                   using a Projected Gauss-Seidel (PGS) solver. PGS attempts to
+A. Simulator Contact Models                                        iteratively resolve each contact constraint separately, keeping
+                                                                   the remaining constraints fixed. Unlike Drake or MuJoCo,
+   1) Drake: Drake [14] uses a compliant model of contact
+                                                                   Bullet’s PGS solver is allowed to return with an intermediate
+with Hunt & Crossley dissipation [15] which penalizes in-
+                                                                   computation when a fixed maximum number of iterations is
+terpenetration using a nonlinear spring-damper law. Using a
+                                                                   reached. In this case, Bullet relies on linear spring-damper
+smooth approximation of Coulomb friction, Drake expresses
+                                                                   Baumgarte stabilization [21] to enforce the contact constraint.
+contact forces as a function of state. Given a normal pene-
+                                                                   This feature can cause a lack of robustness in the event the
+tration distance δ and penetration rate δ̇, the normal contact
+                                                                   PGS solver fails to converge.
+force is
+                     fn = k(1 + bδ̇)+ δ+ ,                   (1)   B. Simulator Considerations
+where k is the stiffness, b is the dissipation, and (·)+ =            The simulators evaluated in this paper are by no means
+max(0, ·) ensures positive normal forces. When incorporated        exhaustive, with several other engines finding popularity in the
+into the equations of motion, this leads to a nonlinear system     robotics community. The three chosen here, however, provide
+of equations. Drake uses the custom TAMSI solver to properly       good coverage of the different styles of contact dynamics
+resolve contact transitions [16]. Like many other contact-         formulations. We note that we considered IsaacGym [22],
+model solvers, TAMSI uses an iterative algorithm; however,         a popular simulator for reinforcement learning applications,
+TAMSI enforces convergence at each time step. Resulting con-       including sim-to-real transfer on a legged robot [23]. However,
+tact forces are therefore consistent with the original modeling
+equations of compliant contact with regularized friction.            1 https://mujoco.readthedocs.io/en/latest/modeling.html
+                                                                                                                                        3
+
+
+
+at the time of publication, IsaacGym does not support modi-            account for state estimation errors, we offset the pelvis vertical
+fication of its compliance parameters. Without this capability,        height so that the feet are in contact with the ground at impact.
+the accuracy of the IsaacGym simulator was quite poor on our           This ensures that the impact timing between the real and
+dataset.                                                               simulated data matches. For context, the maximum correction
+   For the Cassie dataset, we limit our comparisons to Drake           applied is 0.02m, which corresponds to approximately 20%
+and MuJoCo. Bullet does not natively support modeling the              of the total loss for both Drake and MuJoCo.
+reflected inertia from the motors and gearboxes, which plays              We use the same notation for Cassie trajectories as with the
+a significant role in the dynamics of Cassie.                          cube, though Cassie is modeled as a floating-base Lagrangian
+                                                                       system with q ∈ Rn+7 and v ∈ Rn+6 where n = 16 is
+                     III. E XPERIMENTAL S ETUP                         the number of joints. The motor input data, also sampled at
+A. Cube Toss                                                           2000Hz, are the torques measured at the motors as opposed
+                                                                       to the torques commanded by the controller. We make this
+   1) Data: There are 550 trajectories of a 10 cm acrylic
+                                                                       distinction to account for the delays between the output of
+cube tossed onto a wooden table as a dataset for parameter
+                                                                       the controller and when the motor actually is supplied the
+identification and performance evaluation. The data collection
+                                                                       commanded current.
+procedure is described in [24] and the data is available as part
+                                                                          2) Simulation Environment: Simulated data is generated
+of an open source code repository2 . We name these the ground
+                                                                       from Drake and MuJoCo, and Bullet is not used on the Cassie
+truth cube trajectories and denote a ground truth trajectory of
+                                                                       data for reasons explained in II-B.
+length T as x∗ = (x∗t )t=1...T where x∗t = [qt∗ ; vt∗ ] is the state
+                                                                          The description of the robot is specified in a URDF for
+of the cube at each time step. The configuration q consist of
+                                                                       Drake and as a XML for MuJoCo. For both simulators, we
+position p ∈ R3 and orientation R ∈ SO(3), and the velocity
+                                                                       initialize the state of the robot just prior to impact and apply
+v consists of linear and angular velocities ṗ and ω. Physical
+                                                                       the measured motor torques at the corresponding times. This
+properties of the cube-table system are given in Table I. The
+                                                                       decision to simulate in open-loop eliminates the dependency
+cube was weighed to determine the mass, with the inertia
+                                                                       on the controller. For both simulators, the state was sampled
+determined from the measured mass and geometry. Friction
+                                                                       at 2000Hz, consistent with the hardware data.
+was determined via a tilt-test, and restitution was determined
+                                                                          There are slight differences in the Cassie models used by
+by minimizing the prediction error in [24].
+                                                                       Drake and MuJoCo. The physical Cassie robot contains two
+                                                                       four-bar linkages per leg that enable the control of leg length
+                                TABLE I
+                      C UBE P HYSICAL PARAMETERS                       through the knee motor and the control of the toe joint through
+                                                                       an actuator located at the ankle. The MuJoCo simulator
+            Mass          Inertia       Friction    Restitution
+                                                                       provided by Agility Robotics [26] includes the achilles and
+           0.37 kg     .0081 kg m2        0.18        0.125
+                                                                       plantar rods shown in Fig. 2 that form the loop closures for
+                                                                       the linkages.
+   2) Simulation Environment: Each cube toss simulation is                Drake does not natively support loop closure constraints,
+designed to match the real experiment as closely as possible.          thus the URDF does not include the connecting rods but
+The measured dimensions and inertial parameters of the real            accounts for their inertial contribution by adding lumped
+cube are specified in a Universal Robot Description Format             masses at the anchor points. The upper loop closure is modeled
+(URDF) file for Bullet and Drake, and as XML text in the               as a stiff spring with spring constant chosen to enforce the loop
+MJCF format for MuJoCo. The timestep for each simulator is             closure but not interfere with the performance of the simulator.
+set to 1480 Hz, and the resulting trajectories are down-sampled        The lower loop closure is handled by applying actuator efforts
+to match the data collection frequency of 148 Hz. We found             directly at the toe joint, a common convention used in many
+that decreasing the simulator timestep further did not improve         Cassie models [27], [28].
+the prediction capability of any simulator.                               While the state of the connecting rods are fully defined by
+                                                                       the other states, the MuJoCo model includes these redundant
+B. Cassie Jumping                                                      states. For fair comparison, we map the full MuJoCo states to
+   1) Data Collection: We use state and input data from 22             the Drake states when comparing state trajectories.
+jumping experiments performed with the Cassie bipedal robot.
+The jumping trajectories were generated using the jumping                            IV. PARAMETER I DENTIFICATION
+controller detailed in [5], and are available as a public dataset3 .
+                                                                          To evaluate the performance of each simulator, we identify
+The state measurements, sampled at 2000Hz, are composed of
+                                                                       a simulator and system-specific set of contact parameters that
+the joint positions and velocities as well as the floating base
+                                                                       best enables each simulator to reproduce real-world trajecto-
+state of the pelvis. Although we treat the state data as ground
+                                                                       ries. To maintain some comparability across simulators, we
+truth, there is uncertainty in these measurements as a state
+                                                                       only tune the friction, stiffness, and damping parameters for
+estimator [25] is used to compute the floating-base state and
+                                                                       each simulator. The parameters and their physical significance
+joint velocities are subject to encoder noise and resolution. To
+                                                                       are given in Table II. Beyond differences in units, these
+  2 https://github.com/DAIRLab/contact-nets                            parameters may not be physically equivalent, as the contact
+  3 https://github.com/DAIRLab/cassie   impact dataset                 laws vary between simulators. We combine static and dynamic
+4
+
+
+
+                                                                                    2) Cassie Metrics: The joints on the Cassie robot have a
+                                                                                 wide range of inertias; therefore, a naive loss function, such as
+                                                                                 the L2-norm, would lead to over-weighting of the low-inertia
+                                                                                 joints such as the toes. To direct the parameter identification
+                                                                                 algorithm to prioritize capturing the bulk motion of the robot,
+                                                                                 we use a weighted norm
+                                                                                                                       T
+                                                                                                                       X
+                                                                                                 ecassie (x∗ , x̂) =         x̃Tt W x̃t ,            (4)
+                                                                                                                       t=1
+                                                                                 where W is a diagonal matrix, and x̃ is the error between the
+                                                                                 simulated and measured state. The elements of W are all 10 for
+                                                                                 the position indices. For the velocity indices, we use a weight
+                                                                                 of 5 for the floating base rotation, 100 for the floating base
+Fig. 2. The configuration states for a leg of the Cassie robot. The additional   translations, 0.01 for the hip roll, knee spring, and toe joints,
+joints included in the MuJoCo model are indicated in yellow, which include
+the orientation of the achilles rod and the angles of the foot crank linkage.    and 1 for the remaining joints. There are no measurements for
+                                                                                 the velocity of the ankle spring deflection, which is therefore
+                                                                                 omitted from the loss function.
+friction into a single constant µ as we do not see higher                           The data indicates significant but unknown model differ-
+accuracy from distinguishing between coefficients.                               ences between the simulators and the physical robot. These
+                                                                                 differences may include incorrect model parameter values
+                                TABLE II                                         for the spring constants and joint damping. Better modeling
+                     C ONTACT PARAMETERS I DENTIFIED                             these effects would likely improve simulation accuracy, but
+                Parameter         units         Physical Interpretation          the complexity of Cassie makes full system identification
+                    µ                -            Friction coefficient           infeasible and is outside the scope of this paper.
+     Drake          k             N/m              Contact stiffness                To mitigate the effects of model uncertainty mentioned
+                    b             s/m             Contact dissipation
+                    µ                -            Friction coefficient           above, and to focus on capturing the impact event, we evaluate
+    MuJoCo          k           N / (kg m)         Contact stiffness             the trajectories for a brief 50 ms time window (T = 100
+                    b          N s / (kg m)        Contact damping               when sampled at 2000 Hz) around the impact event. This is
+                    µ                -            Friction coefficient
+      Bullet        k             N/m              Contact stiffness
+                                                                                 under the assumption that the contact forces are large and the
+                    b            Ns/m              Contact damping               time window is short enough that error from incorrect model
+                                                                                 parameters will have a relatively small effect. To account for
+                                                                                 timing variations between jumping experiments, we manually
+A. Evaluation Metrics                                                            select the time window for each log to include the first impact
+                                                                                 event for each jump.
+   For a ground truth trajectory x∗ , the corresponding simula-
+tor trajectory x̂(x∗0 , θ) = (x̂t )t=1...T , is simulated with contact
+                                                                                 B. Optimization Procedure
+parameter vector θ from the initial condition x∗0 . We define
+the following error metrics, which will be used in the loss
+                                                                                                           TABLE III
+function for parameter identification. From here on we omit                                 C ONTACT PARAMETER O PTIMIZATION D OMAINS
+the dependence of x̂ on x∗0 and θ for brevity.
+   1) Cube Metrics: The cube configuration error is                                                       Parameter     Θcube            Θcassie
+                                                                                        All Simulators        µ          [0, 1]            [0, 1]
+                                                                                            Drake             k        [1e2, 1e5]       [1e3, 1e6]
+    eq (x∗ , x̂) =                                                                                            b          [0, 2]            [0, 3]
+                        T                                                                  MuJoCo             k        [1e2, 1e4]         [0,1e6]
+                     1X 2 ∗             2
+                             kpt − p̂t k2 + Angle(Rt∗ , R̂t )2 , (3)
+                                                              
+                                                                                                              b         [0, 1e3]         [0, 1e3]
+                     T t=1 l                                                                Bullet            k        [1e2, 1e4]             -
+                                                                                                              b         [0, 1e3]              -
+where l is the side length of the cube and Angle(R1 , R2 )
+is the angle of rotation of the relative rotation between R1                        We identify contact parameters using NGOpt, a gradient-
+and R2 . We scale the position error by 2/l to give identical                    free meta-optimizer provided through the nevergrad Python
+units and similar magnitudes to position and orientation error.                  library [29]. The appropriate contact parameters are the solu-
+Since the velocity in the cube toss data set is generated by                     tion to the optimization problem
+filtering differences of positions, and is therefore influenced by                                       θ∗ = arg min L(θ).                          (5)
+filter dynamics, we do not calculate velocity errors, focusing                                                  θ∈Θ
+instead on long term position and orientation accuracy. Due                      The optimization domains are shown in Table III. The loss
+to the second order dynamics of the cube, this will capture                      functions for the cube and Cassie are
+the effect of finding the correct contact dynamics while not                                                1 X
+biasing toward incorrect velocity estimates in the ground truth                                    Lcube =        eq (x∗i , x̂i )      (6)
+                                                                                                           N
+data.                                                                                                            i∈I
+                                                                                                                                                  5
+
+
+
+and                                                                                                      VI. D ISCUSSION
+                               1 X                                                   Drake, MuJoCo, and Bullet are all capable of recreating the
+                  Lcassie    =     ecassie (x∗i , x̂i ),                    (7)   bulk motion of the trajectories seen in our datasets. While the
+                               N
+                                      i∈I
+                                                                                  following section discusses potential areas for improvement,
+where I is the dataset and N is the total number of trajectories                  the salient point should be that modern robotics simulators are
+in the dataset.                                                                   able to capture dynamic impacts with friction for a range of
+                                                                                  contact parameters.
+                               V. R ESULTS                                        A. Cube
+A. Cube                                                                              1) Sources of Error: Drake and Bullet have similar errors,
+                                                                                  as they both recreated near inelastic collision observed in the
+  1) Parameters: The optimal contact parameters θ∗ for each
+                                                                                  cube toss system, though they produced less restitution than
+simulator are reported in Table IV4 .
+                                                                                  observed in the real system. For most tosses this resulted in a
+                                                                                  minor contribution to the average position error, though occa-
+                                TABLE IV                                          sionally caused the simulated cube to slide rather than bounce
+                   I DENTIFIED C UBE T OSS PARAMETERS
+                                                                                  and settle on a different face (Figure 4). High rotation error in
+                                        Dissipation/                              these instances is responsible for the large standard deviations
+                          Stiffness      Damping       Friction
+                                                                                  in Table V. MuJoCo exhibited more elastic behavior, though
+              Drake        10800            0.4          0.10
+             MuJoCo         3300             45          0.22                     this was accompanied by softer impacts and larger penetration
+              Bullet        1800             27          0.36                     depths (Figure 5).
+                                                                                     2) Simulator Comparison: As seen in Table V, MuJoCo
+                                                                                  was the least accurate in matching cube trajectories. Due to
+   2) Performance: As shown in Table V, the simulators                            the interplay between friction and contact dynamics, MuJoCo
+are all able to accurately reproduce cube toss trajectories,                      produces longer contact events with lower peak forces, dissi-
+with Drake and Bullet being more accurate than MuJoCo. In                         pating energy more slowly than the other simulators. While
+addition to the minimum eq observed for each simulator, we                        this effect can be tuned out for individual logs, we found no
+report average position and rotation error along with standard                    parameter change which was able to improve the average eq
+deviation σ for each metric.                                                      across all logs.
+                               TABLE V                                            B. Cassie
+                        S UMMARY OF C UBE E RRORS
+                                                                                     The velocities of the primary load-bearing joints (hip pitch,
+               Position Err. ±σ.        Rotation Err. ±σ          eq ±σ           knee, and ankle), are captured well by both simulators. As a
+               (% Cube Width)               (Degrees)
+                                                                                  result, the vertical velocity of pelvis, which is the combination
+    Drake         13.5 ± 8.2              16.5 ± 20.0         0.27 ± 0.57
+   MuJoCo         25.1 ± 10.8             21.7 ± 21.4         0.38 ± 0.63         of the load-bearing joints, is similarly captured as shown in
+    Bullet        14.9 ± 8.9              16.5 ± 20.2         0.27 ± 0.57         Fig. 6. This is surprising, because the simulators are not only
+                                                                                  able to predict the velocity at the end of the time window,
+                                                                                  but also able to model the rate at which the velocity changes
+B. Cassie                                                                         as well. This is promising evidence in support of the use of
+                                                                                  simulators to evaluate the performance of controllers during
+   The optimal contact parameters θ∗ and the average loss for
+                                                                                  the impact event, when the impact has not fully resolved.
+Drake and MuJoCo are reported in Table VI. Although we                               Certain logs, where Cassie landed distinctly with the rear
+report a single set of optimal parameters, we observe that a                      parts of the feet first, have significantly high losses across
+wide range of parameters for both simulators achieve similar                      all contact parameters. The additional error is attributed to a
+performance as shown in Fig. 3. The parameter set that works                      twisting motion at the pivot points which caused the orienta-
+well for MuJoCo is a damping value near the optimal value,                        tion of the pelvis to shift quickly. While this twisting motion
+and depends very little on the stiffness parameter. Drake, on                     is present in those actual trajectories, the actual motion was
+the other hand, has a band of optimal parameters that shows                       not as severe. This may be due to the contact patches on the
+a clear relationship between stiffness and dissipation.                           physical robot able to exert moments about the contact normal,
+                                                                                  whereas in both simulators, contact forces are represented
+                                TABLE VI                                          as point contacts and unable to produce moments about the
+                I DENTIFIED C ASSIE J UMPING PARAMETERS
+                                                                                  contact point.
+                                            Dissipation
+                      Loss     Stiffness    /Damping       Friction               C. Sensitivity Analysis
+          Drake       38.0       9400           3.0          0.45
+         MuJoCo       30.0       1600           270          0.43                    In addition to identifying the parameters for each simulator
+                                                                                  and system, we also perform a sensitivity analysis of the
+   4 Due to a transcription error, incorrect Bullet parameters were reported in
+                                                                                  parameters by sweeping each parameter value individually,
+the original IEEE manuscript. The correct parameters are reported here. This      holding the remaining values at θ∗ . The results of this analysis
+error does not affect any other results or conclusions.                           are shown in Fig. 3.
+6
+
+
+
+
+Fig. 3. We perform a sensitivity analysis by holding friction fixed at the optimal value while sweeping a range of stiffness and damping values, and vice-versa.
+Cube Toss (Top Row): All three simulators are mostly insensitive to stiffness above a given threshold, while MuJoCo and Bullet require sufficient damping as
+well. Friction (Middle): Cube toss error is sensitive to the friction coefficient parameter due to large amounts of sliding in the dataset, while Cassie jumping
+is not, due to mostly experiencing static friction. Cassie Jump (Bottom): Drake and MuJoCo display relatively low sensitivity to the contact parameters and
+have a wide range of parameter values that achieve low error. MuJoCo shows almost no sensitivity to its stiffness parameter.
+
+   1) Stiffness and Damping: It is surprising that MuJoCo                        are difficult to accurately model [30] [31], and the three contact
+appears to be insensitive to small stiffness values, given that                  modeling paradigms explored here may need different values
+stiffness is responsible for enforcing non-penetration. Our                      to achieve low prediction error and account for the un-modeled
+hypothesis is that, in the small time window around the impact                   effects of each framework.
+event, the damping forces provide sufficient contact force for                      The Cassie trajectories did not enter the slip-regime for
+our datasets due to the large impact velocity.                                   friction, which is necessary to characterize the friction co-
+   For the cube toss dataset, the sensitivity of Bullet and                      efficient. This is why the sensitivity to the friction coefficient
+MuJoCo to insufficient damping, and the correlation of this                      is relatively flat.
+dependence with the amount of stiffness, suggests that there is
+an optimal damping ratio for MuJoCo’s soft contact dynamics                                                VII. C ONCLUSIONS
+and Bullet’s constraint stabilization for this system. Note that                    We observe that for both systems, the simulators tested are
+this is not the real damping ratio of the contact dynamics,                      able to reproduce the bulk motion observed during impact.
+due to trade-offs between friction and contact dynamics in                       This suggests that simulators can indeed be an appropriate tool
+MuJoCo, and the fact that Bullet only uses a spring-damper                       for controller design and verification in impact-rich settings.
+law to stabilize the simulation of rigid contact.                                Additionally, we observe that accurate simulator performance
+   2) Friction: The cube toss prediction error is sensitive                      can be achieved by a wide range of contact parameters, which
+to the coefficient of friction, which is unsurprising given                      suggests that extensive identification of the contact parameters
+the large amount of sliding contact in the dataset. Perhaps                      is not necessary.
+more surprising is that every simulator is so sensitive to the                      While the simulators perform well on a significant portion
+friction coefficient while not necessarily being close to the                    of the cube dataset, there were several cube tosses that all
+experimentally measured value in Table I. Frictional impacts                     simulators struggle on. We were unable find any property that
+                                                                                                                                                              7
+
+
+
+
+                                                                                Fig. 5. The lowest point on the cube for the three simulators on a typical toss,
+                                                                                simulated using the optimal parameters for each simulator. When the lowest
+                                                                                point of the cube is below the ground (<0), the system is in penetration.
+                                                                                Hand-tuning MuJoCo’s damping parameter can reduce the “bouncing” for
+                                                                                this particular toss, but as seen in Figure 3, there is no parameter change
+                                                                                which could improve the MuJoCo’s performance across all logs.
+
+
+
+
+Fig. 4. Motion patterns showing the real cube (grey) and the simulated cube
+(blue) for an inelastic (top) and elastic (bottom) collision in Drake.
+
+
+
+nicely distinguishes these tosses from the rest of the dataset,
+though we noted that these tosses often involve frictional
+impact with an edge or corner of the cube. We believe that
+further investigating and characterizing these particular cases
+can result in improved simulator performance.
+   Although the identified cube parameters are fairly stiff, the
+identified parameters for Cassie are much softer. This may
+be due to the rubber pads on Cassie’s feet as well as other
+mechanical compliance associated with a larger system. This
+                                                                                Fig. 6. The vertical pelvis velocity of Cassie with respect to its feet for
+compliance results in impacts resolving over tens of millisec-                  the 50ms duration. In this direction, which is composed from the combined
+onds, which is important to model when using simulators for                     kinematics of the load-bearing joints, both simulators do a remarkable job
+validation or in learning situations.                                           of capturing the real data. This level of agreement is present in many of the
+                                                                                tested logs.
+
+                       ACKNOWLEDGEMENTS
+   We thank Mathew Halm for helpful discussions and assis-                       [4] W. Ubellacker, N. Csomay-Shanklin, T. G. Molnar, and A. D. Ames,
+tance with the cube-toss dataset and Alejandro Castro for his                        “Verifying Safe Transitions between Dynamic Motion Primitives on
+                                                                                     Legged Robots,” arXiv:2106.10310 [cs], June 2021, arXiv: 2106.10310.
+insight on simulator contact models.                                                 [Online]. Available: http://arxiv.org/abs/2106.10310
+                                                                                 [5] W. Yang and M. Posa, “Impact Invariant Control with Applications to
+                                                                                     Bipedal Locomotion,” in 2021 IEEE/RSJ International Conference on
+                             R EFERENCES                                             Intelligent Robots and Systems (IROS), 2021.
+ [1] J. Siekmann, Y. Godse, A. Fern, and J. Hurst, “Sim-to-Real Learning         [6] Y. Gong and J. Grizzle, “Angular momentum about the contact point
+     of All Common Bipedal Gaits via Periodic Reward Composition,”                   for control of bipedal locomotion: Validation in a lip-based controller,”
+     arXiv:2011.01387 [cs], Mar. 2021, arXiv: 2011.01387. [Online].                  arXiv preprint arXiv:2008.10763, 2020.
+     Available: http://arxiv.org/abs/2011.01387                                  [7] D. E. Stewart and J. C. Trinkle, “An implicit time-stepping scheme for
+ [2] A. Kumar, Z. Fu, D. Pathak, and J. Malik, “RMA: Rapid Motor                     rigid body dynamics with inelastic collisions and coulomb friction,”
+     Adaptation for Legged Robots,” arXiv:2107.04034 [cs], July 2021,                International Journal for Numerical Methods in Engineering, vol. 39,
+     arXiv: 2107.04034. [Online]. Available: http://arxiv.org/abs/2107.04034         no. 15, pp. 2673–2691, 1996. [Online]. Available: https://onlinelibrary.
+ [3] Z. Xie, P. Clary, J. Dao, P. Morais, J. Hurst, and M. Panne, “Learning          wiley.com/doi/abs/10.1002/%28SICI%291097-0207%2819960815%
+     locomotion skills for cassie: Iterative design and sim-to-real,” in Con-        2939%3A15%3C2673%3A%3AAID-NME972%3E3.0.CO%3B2-I
+     ference on Robot Learning. PMLR, 2020, pp. 317–329.                         [8] M. Anitescu and F. A. Potra, “Formulating dynamic multi-rigid-body
+8
+
+
+
+          contact problems with friction as solvable linear complementarity prob-      [30] M. Payr and C. Glocker, “Oblique frictional impact of a bar: analysis
+          lems,” Nonlinear Dynamics, vol. 14, no. 3, pp. 231–247, 1997.                     and comparison of different impact laws,” Nonlinear Dynamics, vol. 41,
+    [9]   T. Erez, Y. Tassa, and E. Todorov, “Simulation tools for model-based              no. 4, pp. 361–383, 2005.
+          robotics: Comparison of Bullet, Havok, MuJoCo, ODE and PhysX,”               [31] M. Halm and M. Posa, “Modeling and analysis of non-unique behaviors
+          in 2015 IEEE International Conference on Robotics and Automation                  in multiple frictional impacts,” in Robotics: Science and Systems, 2019.
+          (ICRA), May 2015, pp. 4397–4404, iSSN: 1050-4729.                            [32] T. Miki, J. Lee, J. Hwangbo, L. Wellhausen, V. Koltun, and M. Hutter,
+[10]      N. Fazeli, E. Donlon, E. Drumwright, and A. Rodriguez, “Empirical                 “Learning robust perceptive locomotion for quadrupedal robots in the
+          evaluation of common contact models for planar impact,” in 2017 IEEE              wild,” Science Robotics, vol. 7, no. 62, p. eabk2822.
+          International Conference on Robotics and Automation (ICRA), May
+          2017, pp. 3418–3425.
+[11]      A. Chatterjee, “On the Realism of Complementarity Conditions in Rigid
+          Body Collisions,” Nonlinear Dynamics, vol. 20, no. 2, pp. 159–168, Oct.
+          1999. [Online]. Available: https://doi.org/10.1023/A:1008397905242
+[12]      N. Fazeli, A. Ajay, and A. Rodriguez, “Long-Horizon Prediction and
+          Uncertainty Propagation with Residual Point Contact Learners,” in 2020
+          IEEE International Conference on Robotics and Automation (ICRA),
+          May 2020, pp. 7898–7904, iSSN: 2577-087X.
+[13]      M. Parmar, M. Halm, and M. Posa, “Fundamental Challenges in Deep
+          Learning for Stiff Contact Dynamics,” in 2021 IEEE/RSJ International
+          Conference on Intelligent Robots and Systems (IROS), 2021.
+[14]      R. Tedrake and the Drake Development Team, “Drake: Model-based
+          design and verification for robotics,” 2019. [Online]. Available:
+          https://drake.mit.edu
+[15]      K. H. Hunt and F. R. E. Crossley, “Coefficient of Restitution
+          Interpreted as Damping in Vibroimpact,” Journal of Applied Mechanics,
+          vol. 42, no. 2, pp. 440–445, June 1975. [Online]. Available:
+          https://doi.org/10.1115/1.3423596
+[16]      A. M. Castro, A. Qu, N. Kuppuswamy, A. Alspach, and M. Sherman,
+          “A transition-aware method for the simulation of compliant contact with
+          regularized friction,” IEEE Robotics and Automation Letters, vol. 5,
+          no. 2, pp. 1859–1866, 2020.
+[17]      M. Anitescu, “Optimization-based simulation of nonsmooth rigid
+          multibody dynamics,” Mathematical Programming: Series A and
+          B, vol. 105, no. 1, pp. 113–143, Jan. 2006. [Online]. Available:
+          https://doi.org/10.1007/s10107-005-0590-7
+[18]      E. Todorov, “Convex and analytically-invertible dynamics with contacts
+          and constraints: Theory and implementation in MuJoCo,” in 2014 IEEE
+          International Conference on Robotics and Automation (ICRA), May
+          2014, pp. 6054–6061, iSSN: 1050-4729.
+[19]      H. Mazhar, D. Melanz, M. C. Ferris, and D. Negrut, “An Analysis
+          of Several Methods for Handling Hard-Sphere Frictional Contact in
+          Rigid Multibody Dynamics,” in ECCOMAS Thematics Conference on
+          Multibody Dynamics, 2015.
+[20]      “SimBenchmark. Physics engine benchmark for robotics applications:
+          RaiSim vs. Bullet vs. ODE vs. MuJoCo vs. DartSim.” [Online].
+          Available: https://leggedrobotics.github.io/SimBenchmark
+[21]      J. Baumgarte, “Stabilization of constraints and integrals of motion
+          in dynamical systems,” Computer Methods in Applied Mechanics
+          and Engineering, vol. 1, no. 1, pp. 1–16, 1972. [Online]. Available:
+          https://www.sciencedirect.com/science/article/pii/0045782572900187
+[22]      V. Makoviychuk, L. Wawrzyniak, Y. Guo, M. Lu, K. Storey, M. Macklin,
+          D. Hoeller, N. Rudin, A. Allshire, A. Handa, et al., “Isaac gym: High
+          performance gpu-based physics simulation for robot learning,” arXiv
+          preprint arXiv:2108.10470, 2021.
+[23]      N. Rudin, D. Hoeller, P. Reist, and M. Hutter, “Learning to walk
+          in minutes using massively parallel deep reinforcement learning,” in
+          Conference on Robot Learning. PMLR, 2022, pp. 91–100.
+[24]      S. Pfrommer, M. Halm, and M. Posa, “Contactnets: Learning of dis-
+          continuous contact dynamics with smooth, implicit representations,”
+          Conference on Robotic Learning (CoRL), 2020.
+[25]      R. Hartley, M. Ghaffari, R. M. Eustice, and J. W. Grizzle, “Contact-
+          aided invariant extended kalman filtering for robot state estimation,” The
+          International Journal of Robotics Research, vol. 39, no. 4, pp. 402–430,
+          2020.
+[26]      A. Robotics, “cassie-mujoco-sim,” 2018. [Online]. Available: https:
+          //github.com/osudrl/cassie-mujoco-sim
+[27]      J. Reher, W.-L. Ma, and A. D. Ames, “Dynamic Walking with Com-
+          pliance on a Cassie Bipedal Robot,” in 2019 18th European Control
+          Conference (ECC), June 2019, pp. 2589–2595.
+[28]      Y. Gong, R. Hartley, X. Da, A. Hereid, O. Harib, J.-K. Huang, and
+          J. Grizzle, “Feedback control of a cassie bipedal robot: Walking,
+          standing, and riding a segway,” in 2019 American Control Conference
+          (ACC). IEEE, 2019, pp. 4559–4566.
+[29]      J. Rapin and O. Teytaud, “Nevergrad - A gradient-free optimization
+          platform,” https://GitHub.com/FacebookResearch/Nevergrad, 2018.
+

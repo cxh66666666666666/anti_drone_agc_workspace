@@ -7,8 +7,6 @@
 #include "lqr_trajectory_tracker/trajectory_generator.h"
 #include <cmath>
 #include <algorithm>
-#include <random>
-#include <iostream>
 
 namespace lqr_trajectory_tracker {
 
@@ -30,7 +28,7 @@ TrajectoryGenerator::~TrajectoryGenerator() {}
  */
 double TrajectoryGenerator::computeVelocityProfile(double t, double duration) const 
 {
-    double normalized_time = t / duration;
+    double normalized_time = std::max(0.0, std::min(1.0, t / duration));
     
     if (normalized_time < 0.1) 
     {
@@ -41,6 +39,19 @@ double TrajectoryGenerator::computeVelocityProfile(double t, double duration) co
         return (1.0 - normalized_time) / 0.1;
     }
     return 1.0;
+}
+
+// Integral of computeVelocityProfile over normalized time.  The profile area
+// is 0.9 (0.05 + 0.8 + 0.05), so callers can normalize it to the requested
+// displacement.
+static double integratedVelocityProfile(double normalized_time)
+{
+    const double u = std::max(0.0, std::min(1.0, normalized_time));
+    if (u < 0.1)
+        return 5.0 * u * u;
+    if (u <= 0.9)
+        return u - 0.05;
+    return 10.0 * u - 5.0 * u * u - 4.10;
 }
 
 /**
@@ -76,7 +87,8 @@ std::vector<TrajectoryPoint> TrajectoryGenerator::generateLinearTrajectory(
     }
     
     direction.normalize();
-    double max_velocity = distance / (duration * 0.8);
+    const double profile_area = 0.9;
+    double max_velocity = distance / (duration * profile_area);
     
     for (int i = 0; i < num_points; ++i) 
     {
@@ -84,8 +96,9 @@ std::vector<TrajectoryPoint> TrajectoryGenerator::generateLinearTrajectory(
         TrajectoryPoint point;
         point.timestamp = t;
         
-        double s = t / duration;
-        point.position = start + s * (end - start);
+        double s = std::max(0.0, std::min(1.0, t / duration));
+        double progress = integratedVelocityProfile(s) / profile_area;
+        point.position = start + progress * (end - start);
         
         double vel_profile = computeVelocityProfile(t, duration);
         point.velocity = direction * max_velocity * vel_profile;
@@ -207,35 +220,6 @@ std::vector<TrajectoryPoint> TrajectoryGenerator::generateHelicalTrajectory(
 }
 
 /**
- * @brief Catmull-Rom样条插值计算中间点
- * @param p0 第一个点
- * @param p1 第二个点
- * @param p2 第三个点
- * @param p3 第四个点
- * @param t 插值参数
- * @return Eigen::Vector3d 插值结果
- */
-Eigen::Vector3d catmullRomSpline(
-    const Eigen::Vector3d& p0,
-    const Eigen::Vector3d& p1,
-    const Eigen::Vector3d& p2,
-    const Eigen::Vector3d& p3,
-    double t) 
-{
-    double t2 = t * t;
-    double t3 = t2 * t;
-
-    Eigen::Vector3d result = 0.5 * (
-        (2.0 * p1) +
-        (-p0 + p2) * t +
-        (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
-        (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
-    );
-
-    return result;
-}
-
-/**
  * @brief 获取指定时间点的轨迹点
  * @param trajectory 轨迹点向量
  * @param time 时间戳
@@ -284,8 +268,8 @@ TrajectoryPoint TrajectoryGenerator::getPointAtTime(
 }
 
 /**
- * @brief 生成固定水平8字形轨迹（4段：右半圆→上直线→左半圆→下直线，全程匀速）
- * @param params 固定水平8字形轨迹参数
+ * @brief 生成历史固定水平跑道形轨迹（右半圆→上直线→左半圆→下直线）
+ * @param params 固定水平跑道形轨迹参数
  * @param duration 轨迹持续时间（仅决定采样点数，不改变角速率）
  * @param dt 时间步长
  * @return std::vector<TrajectoryPoint> 固定水平8字形轨迹点向量
@@ -389,6 +373,35 @@ std::vector<TrajectoryPoint> TrajectoryGenerator::generateFixedHorizontalTraject
     return trajectory;
 }
 
+std::vector<TrajectoryPoint> TrajectoryGenerator::generateFigureEightTrajectory(
+    const FigureEightParams& params,
+    double duration,
+    double dt)
+{
+    std::vector<TrajectoryPoint> trajectory;
+    const int num_points = static_cast<int>(duration / dt) + 1;
+    const double omega = params.angular_velocity;
+
+    for (int i = 0; i < num_points; ++i)
+    {
+        const double t = i * dt;
+        const double theta = omega * t;
+        TrajectoryPoint point;
+        point.timestamp = t;
+        point.position.x() = params.center_x + params.radius_x * std::sin(theta);
+        point.position.y() = params.center_y + params.radius_y * std::sin(theta) * std::cos(theta);
+        point.position.z() = params.height;
+        point.velocity.x() = params.radius_x * omega * std::cos(theta);
+        point.velocity.y() = params.radius_y * omega * std::cos(2.0 * theta);
+        point.velocity.z() = 0.0;
+        point.acceleration.x() = -params.radius_x * omega * omega * std::sin(theta);
+        point.acceleration.y() = -2.0 * params.radius_y * omega * omega * std::sin(2.0 * theta);
+        point.acceleration.z() = 0.0;
+        trajectory.push_back(point);
+    }
+    return trajectory;
+}
+
 /**
  * @brief 生成悬停轨迹（所有点位置相同，零速度/零加速度）
  * @param position 悬停位置
@@ -414,6 +427,60 @@ std::vector<TrajectoryPoint> TrajectoryGenerator::generateStepTrajectory(
         trajectory.push_back(point);
     }
 
+    return trajectory;
+}
+
+/**
+ * @brief 生成航点轨迹（按弧长等速重采样，末点速度置零）
+ */
+std::vector<TrajectoryPoint> TrajectoryGenerator::generateWaypointTrajectory(
+    const std::vector<Eigen::Vector3d>& waypoints,
+    double speed,
+    double dt)
+{
+    std::vector<TrajectoryPoint> trajectory;
+    if (waypoints.size() < 2 || speed <= 0.0 || dt <= 0.0)
+        return trajectory;
+
+    std::vector<double> cumulative(waypoints.size(), 0.0);
+    for (size_t i = 1; i < waypoints.size(); ++i)
+    {
+        cumulative[i] = cumulative[i - 1] + (waypoints[i] - waypoints[i - 1]).norm();
+    }
+    const double total_length = cumulative.back();
+    if (total_length < 1e-6)
+        return trajectory;
+
+    const double duration = total_length / speed;
+    const int num_points = static_cast<int>(duration / dt) + 2;
+    size_t segment = 0;
+
+    for (int i = 0; i < num_points; ++i)
+    {
+        const double s = std::min(static_cast<double>(i) * dt * speed, total_length);
+        while (segment + 1 < waypoints.size() && cumulative[segment + 1] < s)
+            ++segment;
+
+        TrajectoryPoint point;
+        point.timestamp = i * dt;
+        point.acceleration = Eigen::Vector3d::Zero();
+        if (segment + 1 < waypoints.size())
+        {
+            const double seg_len = cumulative[segment + 1] - cumulative[segment];
+            const double ratio = seg_len > 1e-9
+                ? (s - cumulative[segment]) / seg_len : 0.0;
+            point.position = waypoints[segment]
+                + ratio * (waypoints[segment + 1] - waypoints[segment]);
+            point.velocity = speed
+                * (waypoints[segment + 1] - waypoints[segment]).normalized();
+        }
+        else
+        {
+            point.position = waypoints.back();
+            point.velocity = Eigen::Vector3d::Zero();
+        }
+        trajectory.push_back(point);
+    }
     return trajectory;
 }
 

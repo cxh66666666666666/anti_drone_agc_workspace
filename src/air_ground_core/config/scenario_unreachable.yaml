@@ -1,0 +1,38 @@
+# M6 固定场景：不可达 / 拦截失败（unreachable / intercept failure）。
+#
+# 构造依据（M3 记录的「安全接近点（精确几何）与规划栅格（量化膨胀）在保护距离边界不一致」）：
+#   目标地面投影放在 pole_2(4.5,1.6) 保护距离内的 (3.6,1.6)（净空 0.75m < protection_m 0.80m）。
+#   task_manager.safeApproachPoint 沿「车->目标」方向回退到「净空刚好 ≥0.80」的边界点，
+#   该点落在 0.5m 栅格 (47,43)（中心 (3.75,1.75)，中心净空 0.60m < dilate 0.80m）内；
+#   ground_planner 将该格判为阻塞 -> astar_no_path 连续失败 -> /agc/planner/unreachable=true
+#   -> task_manager 结算 MISSION_FAILED/PLAN_UNREACHABLE。
+# 障碍/地图/车起点与 scenario_flat.yaml 逐字段一致（障碍必须与世界 agc_world.world 一致）；
+# 仅 target_start 不同（由 scenario_reset 在复位时写入目标位姿）。
+scenario_id: unreachable_target
+locked: true
+note: "M6 不可达类别；目标贴近 pole_2 使安全接近点落于规划阻塞栅格；所有阈值在 run 前锁定"
+car_start: [-4.0, -3.0, 0.11, 0.0]      # x, y, z, yaw
+target_start: [3.6, 1.6, 2.0, 0.0]      # 目标地面投影距 pole_2 净空 0.75m（< protection 0.80）
+drone_start: [0.0, 0.0, 0.0]
+target_motion:
+  mode: static            # static | linear
+  speed_mps: 0.0
+  waypoints: [[3.6, 1.6], [3.6, 1.6]]
+obstacles:
+  - {name: pole_1, pose: [2.5, 0.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+  - {name: pole_2, pose: [4.5, 1.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+map:
+  resolution_m: 0.5
+  size_x_m: 40.0
+  size_y_m: 40.0
+  origin_x: -20.0
+  origin_y: -20.0
+  unknown_is_obstacle: true
+thresholds:
+  approach_radius_m: 3.0
+  hold_window_s: 5.0
+  confidence_min: 0.5
+  search_timeout_s: 60.0
+  approach_timeout_s: 60.0
+  mission_timeout_s: 120.0
+  target_lost_tolerance_s: 2.0

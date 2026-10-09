@@ -1,0 +1,19 @@
+<launch>
+  <!--
+    本 launch 仅用于地面单体实验：其时钟默认墙钟（use_sim_time 默认 false）。
+    协同 run 不使用本 launch，由 air_ground_core/launch/agc_collab.launch 负责，
+    协同 run 全局 /use_sim_time=true。
+  -->
+  <arg name="use_sim_time" default="false" doc="地面单体实验默认墙钟；协同 run 不使用本 launch"/>
+  <arg name="gui" default="false" doc="是否启动 Gazebo GUI（非无头）；默认不启动"/>
+  <param name="/use_sim_time" value="$(arg use_sim_time)"/>
+  <env name="GAZEBO_MODEL_PATH" value="$(find rl_ground_avoidance)/models:/home/ubuntu/PX4_Firmware/Tools/sitl_gazebo/models:$(optenv HOME)/.gazebo/models:$(optenv GAZEBO_MODEL_PATH)"/>
+
+  <node pkg="gazebo_ros" type="gzserver" name="ground_gazebo"
+        args="$(find rl_ground_avoidance)/worlds/ground.world"/>
+  <node if="$(arg gui)" pkg="gazebo_ros" type="gzclient" name="ground_gazebo_gui"
+        output="screen"/>
+
+  <node pkg="rl_ground_avoidance" type="ground_perception.py"
+        name="ground_perception" output="screen"/>
+</launch>

@@ -9,10 +9,16 @@
 import rospy
 import numpy as np
 import math
+import os
+import sys
 from sensor_msgs.msg import PointCloud2
 from sensor_msgs import point_cloud2
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from rl_obstacle_avoidance.msg import ObstacleFeatures
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from perception_utils import points_to_sectors
 
 class PerceptionNode:
     """
@@ -24,8 +30,9 @@ class PerceptionNode:
         # ========== 配置参数 ==========
         self.num_sector = rospy.get_param('~num_sector', 12)
         self.max_range = rospy.get_param('~max_range', 10.0)
-        # The rule baseline uses 0.5 m to reject returns from the drone body.
-        self.min_range = rospy.get_param('~min_range', 0.5)
+        # Reject returns immediately around the vehicle while retaining the
+        # full collision-risk band starting at 0.6 m.
+        self.min_range = rospy.get_param('~min_range', 0.4)
         self.safe_height = rospy.get_param('~safe_height', 1.5)
         self.goal_tolerance = rospy.get_param('~goal_tolerance', 1.0)
 
@@ -35,21 +42,21 @@ class PerceptionNode:
         self.goal_pose = None
         self.last_action = 0
 
-        # 点云数据（用numpy数组存储）
-        self.cloud_data = None
+        self.latest_sectors = None
+        self.cloud_header = None
 
         # ========== 订阅话题 ==========
-        rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback)
-        rospy.Subscriber('/mavros/local_position/pose', PoseStamped, self.pose_callback)
-        rospy.Subscriber('/mavros/local_position/velocity_local', TwistStamped, self.vel_callback)
+        rospy.Subscriber('/velodyne_points', PointCloud2, self.lidar_callback,
+                         queue_size=1, buff_size=2 ** 24)
+        rospy.Subscriber('/mavros/local_position/pose', PoseStamped,
+                         self.pose_callback, queue_size=1)
+        rospy.Subscriber('/mavros/local_position/velocity_local', TwistStamped,
+                         self.vel_callback, queue_size=1)
 
         # ========== 发布话题 ==========
         self.feature_pub = rospy.Publisher('/obstacle_features', ObstacleFeatures, queue_size=1)
 
-        # ========== 定时器（10hz） ==========
-        rospy.Timer(rospy.Duration(0.1), self.publish_features)
-
-        rospy.loginfo("[perception_node] 视觉感知节点初始化完成")
+        rospy.loginfo("[perception_node] 点云感知节点初始化完成")
         rospy.spin()
 
     """
@@ -57,8 +64,12 @@ class PerceptionNode:
     """
     def lidar_callback(self, msg):
         try:
-            # 将PointCloud2消息转换为numpy数组
-            self.cloud_data = self.read_pointcloud(msg)
+            points = self.read_pointcloud(msg)
+            self.latest_sectors = points_to_sectors(
+                points, self.num_sector, self.min_range,
+                self.max_range, self.safe_height)
+            self.cloud_header = msg.header
+            self.publish_features()
         except Exception as e:
             rospy.logerr("[perception_node] 点云数据转换错误: %s", e)
 
@@ -68,12 +79,11 @@ class PerceptionNode:
     """
     def read_pointcloud(self, cloud_msg):
         gen = point_cloud2.read_points(cloud_msg, field_names=('x', 'y', 'z'), skip_nans=True)
-        points = []
-        for p in gen:
-            points.append([p[0], p[1], p[2]])
-        if not points:
+        flat = np.fromiter((value for point in gen for value in point),
+                           dtype=np.float32)
+        if flat.size == 0:
             return np.empty((0, 3), dtype=np.float32)
-        return np.array(points, dtype=np.float32)
+        return flat.reshape((-1, 3))
 
     """
     @brief: 无人机位姿回调函数
@@ -94,35 +104,9 @@ class PerceptionNode:
     @note: 核心算法
     """
     def lidar_to_sector(self, points):
-        if points is None or len(points) == 0:
-            return [1.0] * self.num_sector
-        
-        sectors = [self.max_range] * self.num_sector
-
-        for point in points:
-            x, y, z = point[0], point[1], point[2]
-
-            dist_xy = math.sqrt(x**2 + y**2)
-
-            if dist_xy < self.min_range or dist_xy > self.max_range:
-                continue
-
-            if abs(z) > self.safe_height:
-                continue
-
-            # 无人机 FLU 坐标系: x=前, y=左
-            # atan2(y, x) → 0°=正前方(+x), 90°=正左(+y)
-            angle = math.atan2(y, x)
-
-            sector_size = 2*math.pi / self.num_sector
-            sector_idx = int((angle+math.pi) / sector_size)
-            sector_idx = max(0, min(self.num_sector-1, sector_idx))
-
-            sectors[sector_idx]=min(sectors[sector_idx], dist_xy)
-
-        sectors = [s / self.max_range for s in sectors]
-
-        return sectors
+        return points_to_sectors(
+            points, self.num_sector, self.min_range,
+            self.max_range, self.safe_height)
 
     """
     @brief: 计算相对于目标的方向和距离
@@ -169,10 +153,9 @@ class PerceptionNode:
             rospy.logwarn_throttle(5, "[perception_node] 等待无人机位姿数据... (sim time 时钟可能未启动)")
             return
 
-        if self.cloud_data is not None:
-            lidar_sectors = self.lidar_to_sector(self.cloud_data)
-        else:
-            lidar_sectors = [self.max_range / self.max_range] * self.num_sector
+        if self.latest_sectors is None or self.cloud_header is None:
+            return
+        lidar_sectors = self.latest_sectors
 
         target_dir, target_dist = self.compute_target_info()
 
@@ -186,6 +169,7 @@ class PerceptionNode:
             vel = [0.0, 0.0, 0.0]
 
         msg = ObstacleFeatures()
+        msg.header = self.cloud_header
         msg.lidar_sectors = lidar_sectors
         msg.target_dir_x = target_dir[0]
         msg.target_dir_y = target_dir[1]

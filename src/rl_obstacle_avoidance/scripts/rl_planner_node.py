@@ -13,6 +13,7 @@ from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped
 from rl_obstacle_avoidance.msg import ObstacleFeatures
 from training_utils import (motion_frame_offset, motion_heading,
                             limit_change, quaternion_to_yaw,
+                            path_swept_sectors,
                             rotate_sectors_to_heading)
 
 class RlPlannerNode:
@@ -27,7 +28,7 @@ class RlPlannerNode:
         self.min_height = rospy.get_param("~min_height", 1.0)
         self.safe_distance_norm = rospy.get_param("~safe_distance_norm", 0.35)
 
-        self.max_offset_xy = rospy.get_param("~max_offset_xy", 1.2)  # 最大水平偏移（m）
+        self.max_offset_xy = rospy.get_param("~max_offset_xy", 1.4)  # 最大水平偏移（m）
         self.min_offset_xy = rospy.get_param("~min_offset_xy", 0.3)  # 最小水平偏移（m）
         self.max_offset_z = rospy.get_param("~max_offset_z", 0.3)
         self.emergency_dist_norm = rospy.get_param("~emergency_dist_norm", 0.15)
@@ -36,10 +37,19 @@ class RlPlannerNode:
         self.offset_smooth_alpha = rospy.get_param("~offset_smooth_alpha", 0.8)  # 偏移低通滤波系数（0~1，越大响应越快）
         self.max_offset_change = rospy.get_param("~max_offset_change", 0.25)
         self.heading_min_speed = rospy.get_param("~heading_min_speed", 0.1)
+        self.reference_velocity_timeout = rospy.get_param(
+            "~reference_velocity_timeout", 0.5)
+        if self.reference_velocity_timeout <= 0.0:
+            raise ValueError("reference_velocity_timeout must be positive")
         
         self.current_pose = None
         self.current_velocity = None
         self.reference_velocity = None
+        self.reference_velocity_stamp = None
+        self.reference_mid_lookahead_velocity = None
+        self.reference_mid_lookahead_velocity_stamp = None
+        self.reference_lookahead_velocity = None
+        self.reference_lookahead_velocity_stamp = None
         self.features = None
         self.motion_heading_world = 0.0
 
@@ -57,6 +67,12 @@ class RlPlannerNode:
                          TwistStamped, self.velocity_callback)
         rospy.Subscriber("/lqr_tracker/reference_velocity",
                          Vector3Stamped, self.reference_velocity_callback)
+        rospy.Subscriber("/lqr_tracker/reference_lookahead_velocity",
+                         Vector3Stamped,
+                         self.reference_lookahead_velocity_callback)
+        rospy.Subscriber("/lqr_tracker/reference_mid_lookahead_velocity",
+                         Vector3Stamped,
+                         self.reference_mid_lookahead_velocity_callback)
 
         self.action_pub = rospy.Publisher("/rl_planner/action", Int32, queue_size=1)
         self.local_goal_pub = rospy.Publisher("/rl_planner/local_goal", PoseStamped, queue_size=1)
@@ -84,10 +100,33 @@ class RlPlannerNode:
 
     def reference_velocity_callback(self, msg):
         self.reference_velocity = msg.vector
+        self.reference_velocity_stamp = rospy.Time.now()
+
+    def reference_lookahead_velocity_callback(self, msg):
+        self.reference_lookahead_velocity = msg.vector
+        self.reference_lookahead_velocity_stamp = rospy.Time.now()
+
+    def reference_mid_lookahead_velocity_callback(self, msg):
+        self.reference_mid_lookahead_velocity = msg.vector
+        self.reference_mid_lookahead_velocity_stamp = rospy.Time.now()
+
+    def _fresh_heading(self, velocity, stamp, default):
+        if velocity is None or stamp is None:
+            return default
+        age = (rospy.Time.now() - stamp).to_sec()
+        if (not 0.0 <= age <= self.reference_velocity_timeout or
+                math.hypot(velocity.x, velocity.y) < self.heading_min_speed):
+            return default
+        return math.atan2(velocity.y, velocity.x)
 
     def _motion_sectors(self):
-        velocity = (self.reference_velocity
-                    if self.reference_velocity is not None
+        reference_is_fresh = False
+        if (self.reference_velocity is not None and
+                self.reference_velocity_stamp is not None):
+            age = (rospy.Time.now() - self.reference_velocity_stamp).to_sec()
+            reference_is_fresh = (
+                0.0 <= age <= self.reference_velocity_timeout)
+        velocity = (self.reference_velocity if reference_is_fresh
                     else self.current_velocity)
         if velocity is not None:
             self.motion_heading_world = motion_heading(
@@ -96,9 +135,27 @@ class RlPlannerNode:
         orientation = self.current_pose.pose.orientation
         body_yaw = quaternion_to_yaw(orientation.x, orientation.y,
                                      orientation.z, orientation.w)
-        return rotate_sectors_to_heading(
-            list(self.features.lidar_sectors), body_yaw,
+        mid_heading = self._fresh_heading(
+            self.reference_mid_lookahead_velocity,
+            self.reference_mid_lookahead_velocity_stamp,
             self.motion_heading_world)
+        lookahead_heading = self._fresh_heading(
+            self.reference_lookahead_velocity,
+            self.reference_lookahead_velocity_stamp, mid_heading)
+        sectors = list(self.features.lidar_sectors)
+        swept = path_swept_sectors(
+            sectors, body_yaw,
+            [self.motion_heading_world, mid_heading, lookahead_heading])
+        if (self.current_velocity is not None and
+                math.hypot(self.current_velocity.x,
+                           self.current_velocity.y) >= self.heading_min_speed):
+            actual_heading = math.atan2(
+                self.current_velocity.y, self.current_velocity.x)
+            actual = rotate_sectors_to_heading(
+                sectors, body_yaw, actual_heading)
+            swept = [min(path_value, actual_value)
+                     for path_value, actual_value in zip(swept, actual)]
+        return swept
 
     """
     @brief: 根据扇区数据直接计算轨迹运动坐标系逃逸偏移

@@ -11,7 +11,8 @@ from collections import deque, namedtuple
 Experience = namedtuple(
     "Experience",
     ["state", "action", "reward", "next_state", "done",
-     "next_allowed_actions"])
+     "next_allowed_actions", "bootstrap_discount"],
+    defaults=[None])
 
 
 class ReplayBuffer:
@@ -23,10 +24,11 @@ class ReplayBuffer:
         self.buffer = deque(maxlen=capacity)
 
     def push(self, state, action, reward, next_state, done,
-             next_allowed_actions=None):
+             next_allowed_actions=None, bootstrap_discount=None,
+             priority_hint=1.0):
         """存入一条经验"""
         exp = Experience(state, action, reward, next_state, done,
-                         next_allowed_actions)
+                         next_allowed_actions, bootstrap_discount)
         self.buffer.append(exp)
 
     def sample(self, batch_size):
@@ -100,16 +102,18 @@ class PrioritizedReplayBuffer:
         self.ptr = 0
 
     def push(self, state, action, reward, next_state, done,
-             next_allowed_actions=None):
+             next_allowed_actions=None, bootstrap_discount=None,
+             priority_hint=1.0):
         """存入经验，初始优先级为当前最大优先级或 1.0"""
         exp = Experience(state, action, reward, next_state, done,
-                         next_allowed_actions)
+                         next_allowed_actions, bootstrap_discount)
         self.buffer[self.ptr] = exp
         if self.count > 0:
             max_priority = max(self.tree.tree[self.tree.capacity:])
         else:
             max_priority = 1.0
-        self.tree.add(max_priority ** self.alpha)
+        hinted_priority = max(1.0, priority_hint) ** self.alpha
+        self.tree.add(max(max_priority, hinted_priority))
         self.ptr = (self.ptr + 1) % self.capacity
         self.count = min(self.count + 1, self.capacity)
 
@@ -146,6 +150,39 @@ class PrioritizedReplayBuffer:
         for idx, td_error in zip(indices, td_errors):
             priority = abs(td_error) + self.epsilon
             self.tree.update(idx, priority ** self.alpha)
+
+    def state_dict(self):
+        """Return replay contents and sampling state for training resume."""
+        return {
+            "capacity": self.capacity,
+            "alpha": self.alpha,
+            "beta": self.beta,
+            "beta_increment": self.beta_increment,
+            "epsilon": self.epsilon,
+            "buffer": [tuple(item) if item is not None else None
+                       for item in self.buffer],
+            "count": self.count,
+            "ptr": self.ptr,
+            "tree": self.tree.tree,
+            "tree_ptr": self.tree.ptr,
+        }
+
+    def load_state_dict(self, state):
+        """Restore a replay buffer created with the same capacity."""
+        if int(state["capacity"]) != self.capacity:
+            raise ValueError(
+                "replay buffer capacity mismatch: checkpoint=%d current=%d" %
+                (state["capacity"], self.capacity))
+        self.alpha = float(state["alpha"])
+        self.beta = float(state["beta"])
+        self.beta_increment = float(state["beta_increment"])
+        self.epsilon = float(state["epsilon"])
+        self.buffer = [Experience(*item) if item is not None else None
+                       for item in state["buffer"]]
+        self.count = int(state["count"])
+        self.ptr = int(state["ptr"])
+        self.tree.tree = list(state["tree"])
+        self.tree.ptr = int(state["tree_ptr"])
 
     def __len__(self):
         return self.count

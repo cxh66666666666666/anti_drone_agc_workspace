@@ -5,18 +5,19 @@
  * @date 2026-05-29
  */
 #include <drone_launch_controller/takeoff_controller.h>
-#include <ros/ros.h>
-#include <geometry_msgs/PoseStamped.h>
-#include <cmath>
+#include <algorithm>
 
 namespace drone_launch_controller {
+
+// 起飞/悬停循环频率（Hz）
+static constexpr double kLoopRateHz = 20.0;
 
 /**
  * @brief 无人机起飞控制器类构造函数
  * @details 超时时间默认为60秒
- * @param nh ROS节点句柄
  * @param pose_ptr 当前位置指针
  * @param local_pos_pub 本地位置发布器
+ * @param pose_mutex 保护位置指针的互斥锁
  */
 TakeoffController::TakeoffController(geometry_msgs::PoseStamped* pose_ptr, ros::Publisher& local_pos_pub, std::mutex& pose_mutex)
     : pose_ptr_(pose_ptr)
@@ -128,14 +129,16 @@ void TakeoffController::takeoffLoop()
     ROS_INFO("[TakeoffController] 启动起飞线程");
     ROS_INFO("[TakeoffController] 目标高度: %.2f m", target_altitude_);
 
-    ros::Rate rate(20);
+    ros::Rate rate(kLoopRateHz);
     float step_size = 0.5f;
     float current_target = 0.0f;
     int stable_count = 0;
+    int log_counter = 0;
     const int stable_threshold = 20;
 
     ROS_INFO("[TakeoffController] 等待 OFFBOARD 模式 stabilize...");
-    ros::Duration(0.5).sleep();
+    // 等待时间缩短：上位机在切模式期间会持续发布 setpoint，这里只需让位姿稳定
+    ros::Duration(0.1).sleep();
 
     float initial_alt = getCurrentAltitude();
     ROS_INFO("[TakeoffController] 初始高度: %.2f m", initial_alt);
@@ -183,12 +186,11 @@ void TakeoffController::takeoffLoop()
         
         if (current_target < target_alt) 
         {
-            current_target = std::min(current_target + step_size / 20.0f, target_alt);
+            current_target = std::min(current_target + step_size / static_cast<float>(kLoopRateHz), target_alt);
         }
 
         publishSetpoint(current_target);
 
-        static int log_counter = 0;
         if (++log_counter >= 20) 
         {
             ROS_INFO("[TakeoffController] 上升: current=%.2f m, target=%.2f m, setpoint=%.2f m", 
@@ -270,7 +272,7 @@ void TakeoffController::hoverMaintainLoop()
 {
     ROS_INFO("[TakeoffController] 启动悬停线程");
     
-    ros::Rate rate(20);
+    ros::Rate rate(kLoopRateHz);
     int log_counter = 0;
     
     while (ros::ok() && hover_maintain_running_) 

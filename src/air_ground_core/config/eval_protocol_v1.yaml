@@ -1,0 +1,198 @@
+# eval_protocol_v1 —— 阶段3 D 评估协议（冻结）
+#
+# 本文件是阶段3正式评估的唯一口径来源（success/failure 分类、真值判据、时间窗、数据字典、
+# 分母规则、基线、预注册对照、样本量规划、消融）。冻结后不得就地修改；如需变更，另起
+# eval_protocol_v2 并在 D2 报告中标注协议版本与冻结时间。
+#
+# 契约：沿用 agc-m0-v1.2（单世界 agc_world、world 坐标、仿真时间、唯一地面执行口
+# /agc/ground/cmd_vel、LQR 为唯一空中 setpoint 实际发布者）。不新增/修改协同话题。
+# 感知只称“真值派生的多源观测仿真”，不称真实视觉/雷达识别。真实硬件与拦截机构不在本阶段。
+
+version: eval_protocol_v1
+frozen_at: "2026-10-07"
+contract_version: agc-m0-v1.2
+world: agc_world
+coordinate_frame: world          # 唯一基准坐标系
+time_source: sim_time            # /clock 唯一发布者
+truth_source: /gazebo/model_states
+
+# ---------------------------------------------------------------- 成功/失败分类
+outcomes:
+  states:
+    0: IDLE
+    1: AIR_SEARCH
+    2: TARGET_ACQUIRED
+    3: GROUND_APPROACH
+    4: TRACKING_SUCCESS
+    5: MISSION_FAILED
+    6: ABORTED
+    7: INTERCEPT_CONFIRMED   # 阶段 A 禁用，任何报告不得出现
+    8: INFRA_FAILURE
+  category_by_state:
+    4: tracking_success
+    5: mission_failure
+    6: aborted
+    8: infra_failure
+  valid_task_categories: [tracking_success, mission_failure]
+  success_definition: "终态 TRACKING_SUCCESS(4)：地面车抵近目标并在 hold_window_s 内持续跟踪；该终态不得表述为拦截完成"
+  forbidden_terms: [INTERCEPT_CONFIRMED]
+
+# ---------------------------------------------------------------- 真值判据
+truth_criteria:
+  safety_clearance: "安全净空/碰撞结算一律以真值(/gazebo/model_states)位姿为准；估计量只能作控制输入与性能指标"
+  thresholds_m:
+    emergency_m: 0.35
+    protection_m: 0.80
+  ordering_rule: "emergency < collision < safe（净空阈值必须满足此偏序）"
+  failure_reason_codes:
+    nominal_failure: [TARGET_LOST, APPROACH_TIMEOUT, SEARCH_TIMEOUT, MISSION_TIMEOUT, PLAN_UNREACHABLE, CLEARANCE_VIOLATION, EMERGENCY_TRIGGER, GROUND_COLLISION]
+    infra: [STARTUP_FAILURE, ODOM_INVALID, DRIVE_BACKEND_FAILURE, CONTROL_CONFLICT]
+    operator: [OPERATOR_ABORT]
+
+# ---------------------------------------------------------------- 时间窗
+time_windows_s:
+  search_timeout_s: 60.0
+  approach_timeout_s: 60.0
+  mission_timeout_s: 120.0
+  hold_window_s: 5.0
+  target_lost_tolerance_s: 2.0
+  freshness:
+    target_max_age_s: 0.5
+    cmd_max_age_s: 0.2
+    goal_max_age_s: 1.0
+    odom_max_age_s: 0.5
+    path_max_age_s: 2.0
+  timeout_rule: "超时一律计为失败(valid_task 但非 tracking_success)；只有显式完成才计成功"
+
+# ---------------------------------------------------------------- 分母规则
+denominators:
+  attempted_runs: valid_task_runs + infra_failure_runs + aborted_runs
+  valid_task_runs: tracking_success_runs + mission_failure_runs
+  primary_rate:
+    name: tracking_success_rate
+    num: tracking_success_runs
+    den: valid_task_runs
+  reported_secondary_rates:
+    infra_failure_rate: {num: infra_failure_runs, den: attempted_runs}
+    abort_rate: {num: aborted_runs, den: attempted_runs}
+  rules:
+    - "注入的通信/感知/时钟故障若仿真正常且任务有结局，仍归 valid_task_runs"
+    - "启动、复位、日志损坏等基础设施故障单列 infra_failure_runs"
+    - "基础设施失败不得被静默重跑后抹去；重试只追加记录，原失败保留"
+  report_fields: [point_estimate, ci95, n, generalization_gap, failure_modes, infra_failures]
+
+# ---------------------------------------------------------------- 数据字典
+data_dictionary:
+  run_meta_json:
+    path: "<agc_runs>/<run_id>/meta.json"
+    fields: [run_id, contract_version, agc_params_hash, scenario_hash, world_hash, model_hashes, scripts_hash, git_commit, target_source, obstacle_source, drive_backend, seed, params, t_sim_start, t_sim_end]
+  run_summary_json:
+    path: "<agc_runs>/<run_id>/summary.json"
+    fields: [run_id, final_state, final_state_name, final_reason_code, counting, startup, topics, max_inter_arrival_s, clean_exit]
+    counting_fields: [category, attempted_delta, valid_task_delta, infra_failure_delta, aborted_delta, tracking_success_delta, mission_failure_delta]
+  run_state_events_jsonl:
+    path: "<agc_runs>/<run_id>/state_events.jsonl"
+    fields: [t_sim, t_wall, from, to, state, reason, detail]
+  batch_records_jsonl:
+    path: "<agc_runs>/<_batch>/records.jsonl"
+    fields: [type, batch_id, cycles_requested, attempts_per_cycle, scenario_file, sensors_file, scene_seed, target_source, obstacle_source, inject_mode, inject_sensor, inject_value, cycle, attempt, reset_ok, start_ok, final_state, reason, inject, run_dir]
+  batch_json:
+    path: "<agc_runs>/<_batch>/batch.json"
+    fields: [cycles, any_leftover]
+  manifest_json:
+    path: "experiments/d/manifest_*.json"
+    schema: eval_manifest.schema.json
+
+# ---------------------------------------------------------------- 基线
+baselines:
+  - id: B_gt
+    target_source: gt_adapter
+    obstacle_source: scenario
+    note: "真值直供（无感知链路），rosbag 无噪声，confidence=1"
+  - id: B_fusion
+    target_source: air_fusion
+    obstacle_source: scenario
+    note: "真值派生的多源观测门控 + 逆方差融合（perception_sensors.yaml）"
+  - id: B_noinject
+    target_source: gt_adapter
+    obstacle_source: scenario
+    note: "现有无注入栈（固定名义场景），作为链路注入对照的零注入基线"
+
+# ---------------------------------------------------------------- 预注册对照
+preregistered_comparisons:
+  pairing_rule: "使用相同场景、目标轨迹与种子配对；不同随机源独立编号"
+  comparisons:
+    - id: C1
+      kind: paired
+      a: B_fusion
+      b: B_gt
+      metric: tracking_success_rate
+      hypothesis: "多源观测门控与融合相对真值直供的任务成功率差"
+    - id: C2
+      kind: paired
+      a: randomized
+      b: fixed
+      metric: tracking_success_rate
+      hypothesis: "随机化场景分布相对固定场景的成功率差（场景分布消融）"
+    - id: C3
+      kind: paired
+      a: without_tracking_mechanism
+      b: full_stack
+      metric: tracking_success_rate
+      hypothesis: "去掉关键跟踪机制后的任务成功率下降（机制消融）"
+
+# ---------------------------------------------------------------- 消融
+ablations:
+  - id: A_fixed_vs_randomized
+    description: "固定场景 vs 随机化场景分布"
+    arms: [fixed, randomized]
+  - id: A_remove_tracking_mechanism
+    description: "去掉关键跟踪机制"
+    arms:
+      - id: full_stack
+        detail: "完整栈（air_fusion 门控+融合 + 新鲜度/停车规则）"
+      - id: without_tracking_mechanism
+        detail: "去掉多源门控与融合，改用 gt_adapter 真值直供"
+      - id: success_criteria_sensitivity
+        detail: "成功判据敏感性（hold_window_s 收紧）用于检验成功定义稳健性"
+
+# ---------------------------------------------------------------- 样本量规划
+sample_size_plan:
+  method: "Wilson score 95% 区间半宽规划"
+  primary_metric: tracking_success_rate
+  min_meaningful_difference_pp: 10
+  reference_note: "成功率接近 0.5 时，约 100 个独立有效回合只给约 ±10 个百分点的 95% 区间；细小改进需要更大样本"
+  # 依据 §D0 规定的“先试跑估方差与成本，再定正式样本量”：pilot（每族 1 个独立种子）实测
+  # 单回合约 100-160s，据此把正式测试集收敛到可观成本；区间宽度不足处如实标注（不事后挑样本）。
+  per_family_independent_seeds:
+    nominal: 20
+    obstacle_layout: 12
+    unreachable_closed: 10
+    boundary: 10
+    perception_fault: 14
+  over_provision_ratio: 1.0   # 不再额外生成冗余；基础设施失败由批跑器重试（append-only）处理
+  pilot_evidence: "experiments/d/batch_index_*（nominal->TRACKING_SUCCESS；unreachable_closed->PLAN_UNREACHABLE；perception_fault->SEARCH_TIMEOUT）"
+  ablation_arms:
+    fixed_vs_randomized:
+      fixed_arm: "现有固定场景 scenario_flat.yaml / scenario_linear_target.yaml（每场景 4 个独立种子）"
+      randomized_arm: "test 集 nominal 族（随机化）"
+      n_per_arm: 8
+    remove_tracking_mechanism:
+      full_stack_arm: "test 集 nominal 子集（target_source=gt_adapter）"
+      removed_arm: "同一 nominal 子集改为 target_source=air_fusion（去掉真值直供，走多源门控+融合）"
+      n_per_arm: 8
+  frequency_split:
+    train_seed_base_spacing: 1000   # 按 split 命名空间隔离，禁止跨 split 复用种子
+
+# ---------------------------------------------------------------- 统计口径
+stats:
+  success_ci: wilson_score_95
+  failure_mode: proportion_with_wilson_95
+  paired_effect: risk_difference_with_bootstrap_95
+  bootstrap_resamples: 10000
+  generalization_gap: train_rate_minus_test_rate
+  decision_rule: "以配对效应量的置信区间与预注册最小有意义差异(min_meaningful_difference_pp)比较判断证据是否充分；不以两组区间是否重叠判定"
+  audit_requirement: "每个图表附原始 run 清单(run_id 列表)，可由原始日志单命令再生"
+  strata: "名义、故障注入、基础设施失败分开制表；估计一致性只在有可信真值及可比协方差时计算"
+
+hashes_file: experiments/d/protocol_v1_hashes.json

@@ -1,0 +1,589 @@
+{
+  "scope": "offline review only; numeric reproducibility is not physical validity or gate approval",
+  "source_fingerprints": {
+    "docs/指导书/stage_logs/one/00_README.md": "e6abbf3df2e36feeabfa0258755bbc9f2b5413924e176a47bc639f1dfe25e889",
+    "docs/指导书/stage_logs/one/01_baseline_audit.md": "efd6e71d83a688504a93171bfcb9098c3044ec7dfd47698e4ca26b98c2e02372",
+    "docs/指导书/stage_logs/one/02_brake_hold.md": "9428e9eba058f39ebde96c932daf4cd0b85c8b55e17be5481f29e03026de6ce9",
+    "docs/指导书/stage_logs/one/03_b1_b2_design.md": "78d180ec793b82a70992421e64248b1dfd82deb90e469e69352b7b8fd70e1cb2",
+    "docs/指导书/stage_logs/one/04_mechanism_counterexamples.md": "523ff2311ccbed6fe9133494bf6b607fa96e9a72840bd1fb9a7d9ffebda4370b",
+    "docs/指导书/stage_logs/one/05_nearest_neighbor_table_v1.md": "d67d06db0f551788d117b76c9939c8577a091b47cac596eccb98babec562c9e5",
+    "docs/指导书/stage_logs/one/06_research_decision.md": "e3704274756462b758caa46fefa37234fa2813d7af02096ec9c58bc4d1ee84f4",
+    "docs/指导书/stage_logs/one/07_journal_requirement_check.md": "29095289505c8fba151a283f677a77ea35e65a8761a9170aef1747de11fd85c9",
+    "docs/指导书/stage_logs/one/08_advisor_memo.md": "28833db5dcddd8777fb1d6f006610f05cf846afa3f55fc9ee24945968b07cd52",
+    "experiments/paper_v3/protocols/brake_hold_protocol_v1.md": "dfb54f6a4bfeb992461e42443f6490006e4563a237e9afdde67415032f28c6dc",
+    "experiments/paper_v3/protocols/prediction_replay_format_v1.md": "77415f3edd6d7bb9717b4658c0da80379c26cbb9169d21afe6c1c2cc783425bf",
+    "experiments/paper_v3/mechanisms/brake_model.py": "924832515d2899869098a27eb2f69ac054e7b3270fe3847621fc13b207ab9b64",
+    "experiments/paper_v3/mechanisms/ce1_speed_sweep.py": "dfda7bbbe5f67bd98d9e725739361f87528384a737da8192e96437d5e6ccdcc2",
+    "experiments/paper_v3/mechanisms/ce2_error_direction.py": "ba5e475dbcd56f1fde6ab1e79f9097122cb1949619b8ac7c651906b605c2d321",
+    "experiments/paper_v3/mechanisms/ce3_delay_replay.py": "f11ef8df638b63074d8445e1afc59604466a86c9985660c8930a62363200e882",
+    "experiments/paper_v3/mechanisms/fair_brake_compare.py": "2e975de4bf0cd0549985b9b0ae21716e4c7ada3a582bfa28f6ff35f42793386f",
+    "experiments/paper_v3/scripts/brake_hold_test.py": "7a9ccee0ceb233dcfee93b9d95ca8c51ddddd8fb55d30239f3b727db05aee121"
+  },
+  "frozen_counts": {
+    "matching_existing": 45,
+    "expected_missing": 2,
+    "mismatch": 0
+  },
+  "frozen_checks": [
+    {
+      "path": "src/rl_obstacle_avoidance/scripts/gazebo_env.py",
+      "expected": "3e3dbc76ec497ed1fe6b8cad8ece6df8061dc9e54d999da6599166128f0f6693",
+      "actual": "3e3dbc76ec497ed1fe6b8cad8ece6df8061dc9e54d999da6599166128f0f6693",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "src/rl_obstacle_avoidance/scripts/safety_filter.py",
+      "expected": "2a77a0f7bc32c251113515dc08253ec9ed11b61f40180c941fa1ae560785602e",
+      "actual": "2a77a0f7bc32c251113515dc08253ec9ed11b61f40180c941fa1ae560785602e",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "src/rl_obstacle_avoidance/scripts/safety_policy.py",
+      "expected": "09252fd10a7deb510a0ed56a26be29ccb33d20e36ce0db19f705a971b0852ae0",
+      "actual": "09252fd10a7deb510a0ed56a26be29ccb33d20e36ce0db19f705a971b0852ae0",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "src/rl_obstacle_avoidance/scripts/train_dqn.py",
+      "expected": "4abe50a6d34028d34c016a858cc94182b1f62ae65d1812b29e81e68ae6be4144",
+      "actual": "4abe50a6d34028d34c016a858cc94182b1f62ae65d1812b29e81e68ae6be4144",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage3/run_stage3_batch.py",
+      "expected": "9290c67e336e50d4408144da1a698333ebe8aa8f733a11d731bf0c289c87cff8",
+      "actual": "9290c67e336e50d4408144da1a698333ebe8aa8f733a11d731bf0c289c87cff8",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage3/select_stage3_params.py",
+      "expected": "98b4a614e5eb85a3751fe1b71175935344b82e8f110bffbe7137439fa5717d5f",
+      "actual": "98b4a614e5eb85a3751fe1b71175935344b82e8f110bffbe7137439fa5717d5f",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage3_task5_cross_validate.py",
+      "expected": "aecc6ed953fe39f834df02c63031578c51c9b37af3156e98ecee633758ca5147",
+      "actual": "aecc6ed953fe39f834df02c63031578c51c9b37af3156e98ecee633758ca5147",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage3/build_audit_index.py",
+      "expected": "9ca029e65ad5fd12101eb17b0fb6e5d73de6eead1053bac3b940376364ad924c",
+      "actual": "9ca029e65ad5fd12101eb17b0fb6e5d73de6eead1053bac3b940376364ad924c",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage2/run_eval.py",
+      "expected": "d9d6d60fae9f476b8f7bde4f6010b1e0c216b9a2564964d395a6bada62611d95",
+      "actual": "d9d6d60fae9f476b8f7bde4f6010b1e0c216b9a2564964d395a6bada62611d95",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "scripts/start_sim.sh",
+      "expected": "9d4a2514a600a7a364a0a9731e7c460f6b29c2dc13c60f712a20110a2e868303",
+      "actual": "9d4a2514a600a7a364a0a9731e7c460f6b29c2dc13c60f712a20110a2e868303",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "src/lqr_trajectory_tracker/src/lqr_tracker_node.cpp",
+      "expected": "2474d00f9d73fc6840b78dcc83755741f1cbb0ab4415458cf067b815847191b0",
+      "actual": "2474d00f9d73fc6840b78dcc83755741f1cbb0ab4415458cf067b815847191b0",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "src/drone_launch_controller/src/drone_launch_controller_node.cpp",
+      "expected": "88496da41ba5684ce4a100fa4f77e20560c035c43fe44f9d25366b7406e5e2f1",
+      "actual": "88496da41ba5684ce4a100fa4f77e20560c035c43fe44f9d25366b7406e5e2f1",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_20260915_075856_887737/config.json",
+      "expected": "1889350e87e345b9bfd68d29444346665cafc277ce01917c6c812920b3a24f5d",
+      "actual": "1889350e87e345b9bfd68d29444346665cafc277ce01917c6c812920b3a24f5d",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_20260915_075856_887737/best_model.pt",
+      "expected": null,
+      "actual": null,
+      "matches": true,
+      "expected_missing": true
+    },
+    {
+      "path": "training_runs/dqn_20260915_102257_751824/config.json",
+      "expected": "14f11201fc482782338db8bd65d3ca9c89677b96c37fa3cc8da8b40ef991fbca",
+      "actual": "14f11201fc482782338db8bd65d3ca9c89677b96c37fa3cc8da8b40ef991fbca",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_20260915_102257_751824/best_model.pt",
+      "expected": null,
+      "actual": null,
+      "matches": true,
+      "expected_missing": true
+    },
+    {
+      "path": "training_runs/dqn_20260915_130426_595452/config.json",
+      "expected": "c8c05d2130cfa1e1077846fa0e50e2e8ed3a9f53839a6754f7781cdf35e8e7da",
+      "actual": "c8c05d2130cfa1e1077846fa0e50e2e8ed3a9f53839a6754f7781cdf35e8e7da",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_20260915_130426_595452/best_model.pt",
+      "expected": "31149fd28cb00966c054b30a3864b4f2e2a6b3e699d71fe4e2e44a9fd6198ac1",
+      "actual": "31149fd28cb00966c054b30a3864b4f2e2a6b3e699d71fe4e2e44a9fd6198ac1",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_20260917_075433_512345/config.json",
+      "expected": "f27eaaabc8acec2565f27320f204d956e7b1b4f9dfc775051534c3b90ca77bd8",
+      "actual": "f27eaaabc8acec2565f27320f204d956e7b1b4f9dfc775051534c3b90ca77bd8",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_20260917_075433_512345/best_model.pt",
+      "expected": "e83d6c9a246266a167371c5388dde5bb23b54447af7af5308bd539d46263270a",
+      "actual": "e83d6c9a246266a167371c5388dde5bb23b54447af7af5308bd539d46263270a",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v3_pilot100/config.json",
+      "expected": "9b5eb26c701ebf8e2ff3721894d594093e30c190611b2bf52ca641fad1d394f4",
+      "actual": "9b5eb26c701ebf8e2ff3721894d594093e30c190611b2bf52ca641fad1d394f4",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v3_pilot100/best_model.pt",
+      "expected": "5ea90ffd90d3df423627dd43b011bbd77696618bcc5ddf58edbf8bd9ee0d7005",
+      "actual": "5ea90ffd90d3df423627dd43b011bbd77696618bcc5ddf58edbf8bd9ee0d7005",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s101/config.json",
+      "expected": "a262bf5200612f0cd538932d85c5cb95fe319843ddc16674d91af096fd3aef6b",
+      "actual": "a262bf5200612f0cd538932d85c5cb95fe319843ddc16674d91af096fd3aef6b",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s101/best_model.pt",
+      "expected": "29fb2a9fbba08acac6037a81918894420792a3698dc53b05cb2ff370e9450c68",
+      "actual": "29fb2a9fbba08acac6037a81918894420792a3698dc53b05cb2ff370e9450c68",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s202/config.json",
+      "expected": "4f632b91c73a6ac583cd1aa0e4fe463bf15e554b8e1059cf7d785640ecf2b1aa",
+      "actual": "4f632b91c73a6ac583cd1aa0e4fe463bf15e554b8e1059cf7d785640ecf2b1aa",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s202/best_model.pt",
+      "expected": "2214d1640a1134a1abea1b2283f3bb263c65fe73e7885f2c70bbd22b2e518209",
+      "actual": "2214d1640a1134a1abea1b2283f3bb263c65fe73e7885f2c70bbd22b2e518209",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s303/config.json",
+      "expected": "2145920b5c8894786da43b4d593a1c94ec87cb4d4105b252b901327f0b5b59f3",
+      "actual": "2145920b5c8894786da43b4d593a1c94ec87cb4d4105b252b901327f0b5b59f3",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s303/best_model.pt",
+      "expected": "5317b4159bb10cc02a231a497103e011cb465fe1e10a468c66b73b2581f30dd9",
+      "actual": "5317b4159bb10cc02a231a497103e011cb465fe1e10a468c66b73b2581f30dd9",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s404/config.json",
+      "expected": "73a54ef3843dc6b1a8bf57384d53683aaa4f5cea4cbaecbc6cda0a9244d5d506",
+      "actual": "73a54ef3843dc6b1a8bf57384d53683aaa4f5cea4cbaecbc6cda0a9244d5d506",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s404/best_model.pt",
+      "expected": "a4304b4c199085628608c11edeb8dd8a88a755808ff31c909c0fe584225765af",
+      "actual": "a4304b4c199085628608c11edeb8dd8a88a755808ff31c909c0fe584225765af",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s505/config.json",
+      "expected": "3d311b5617245d8323b4287e159935e24fb722de8578e1e5b019e25c50c649ca",
+      "actual": "3d311b5617245d8323b4287e159935e24fb722de8578e1e5b019e25c50c649ca",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_formal_b2_s505/best_model.pt",
+      "expected": "01c4e6c5bca9013c3014627c1d95b607860e9ab58da391ab49d56d3d3ad8065b",
+      "actual": "01c4e6c5bca9013c3014627c1d95b607860e9ab58da391ab49d56d3d3ad8065b",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_gate_pilot100/config.json",
+      "expected": "5568b64b6a247ba1b0a1128b7a44bf0789452cbda9f98c578dc91c99bfae8ebc",
+      "actual": "5568b64b6a247ba1b0a1128b7a44bf0789452cbda9f98c578dc91c99bfae8ebc",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_gate_pilot100/best_model.pt",
+      "expected": "0724d6e0f08ded0187fbb3370641fe127cf1b6d07eeb665e25dddc624302d411",
+      "actual": "0724d6e0f08ded0187fbb3370641fe127cf1b6d07eeb665e25dddc624302d411",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_pilot100/config.json",
+      "expected": "93471e2f2384e9427f481658b9151a6f02bc0b9cb9be36d44a699435405d12f9",
+      "actual": "93471e2f2384e9427f481658b9151a6f02bc0b9cb9be36d44a699435405d12f9",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v4_pilot100/best_model.pt",
+      "expected": "bb0be4ba872efb5975e8725a78ec014c4a41d4bc3952d78347dcec075cbdf358",
+      "actual": "bb0be4ba872efb5975e8725a78ec014c4a41d4bc3952d78347dcec075cbdf358",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v5_raw_s101/config.json",
+      "expected": "366eaebca03fe21733b590e18c0f7b9c67670c824cf2a0c39273373818da6fee",
+      "actual": "366eaebca03fe21733b590e18c0f7b9c67670c824cf2a0c39273373818da6fee",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v5_raw_s101/best_model.pt",
+      "expected": "304d3b34370a9c062e911113b74ed3df64c6fbd441a61e059bfff6731a382306",
+      "actual": "304d3b34370a9c062e911113b74ed3df64c6fbd441a61e059bfff6731a382306",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v5b_raw_s101/config.json",
+      "expected": "906859efd2e53a5005b9c8ac5ee45041aa1d34cbf77362c32bfea435c5a21f13",
+      "actual": "906859efd2e53a5005b9c8ac5ee45041aa1d34cbf77362c32bfea435c5a21f13",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "training_runs/dqn_v5b_raw_s101/best_model.pt",
+      "expected": "994dc82dc3ce4b1e1abd0cbe9c15f33b2646742f36b530cb76f1cfd1128f99a1",
+      "actual": "994dc82dc3ce4b1e1abd0cbe9c15f33b2646742f36b530cb76f1cfd1128f99a1",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage3/analysis/audit_index.json",
+      "expected": "1b3b93f54c39d68b8271ab81e48e8459b2e2b1e1f76ac76bb57952393fc1e71d",
+      "actual": "1b3b93f54c39d68b8271ab81e48e8459b2e2b1e1f76ac76bb57952393fc1e71d",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage3/analysis/audit_index.csv",
+      "expected": "b752269c16ecf9029824993e67d43a26c6b942e170fdad205a965f1d778f04f6",
+      "actual": "b752269c16ecf9029824993e67d43a26c6b942e170fdad205a965f1d778f04f6",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage2/history_index.json",
+      "expected": "3858923875b0330b997112a0286a77b623da7540b18c26108da36b884de80710",
+      "actual": "3858923875b0330b997112a0286a77b623da7540b18c26108da36b884de80710",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage2_v4/manifests/train.json",
+      "expected": "bb2453e03cf856e8ababca0a544da6d819a196b0b4b74d6d9e6398b17183b826",
+      "actual": "bb2453e03cf856e8ababca0a544da6d819a196b0b4b74d6d9e6398b17183b826",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage2_v4/manifests/validation.json",
+      "expected": "cb7b6bd11f08e1432410c6766c828ec66a2469d4f472e3c37c865f6b9151aba2",
+      "actual": "cb7b6bd11f08e1432410c6766c828ec66a2469d4f472e3c37c865f6b9151aba2",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage2_v4/manifests/test.json",
+      "expected": "45b8fc9128a764511e576de973e602be614fff2ee6de5e9d48193990f6d5ba9f",
+      "actual": "45b8fc9128a764511e576de973e602be614fff2ee6de5e9d48193990f6d5ba9f",
+      "matches": true,
+      "expected_missing": false
+    },
+    {
+      "path": "experiments/stage3/manifests/test.json",
+      "expected": "473de91ebe603f1c1fe58458aa2bb6f5db75a3475d446d6b101ea3ab297f8731",
+      "actual": "473de91ebe603f1c1fe58458aa2bb6f5db75a3475d446d6b101ea3ab297f8731",
+      "matches": true,
+      "expected_missing": false
+    }
+  ],
+  "runs": [
+    {
+      "run": "lat_01",
+      "path": "experiments/paper_v3/identification/brake_hold/lat_01/trace.csv",
+      "trace_sha256": "ec41534a9bc2b46037879cf98cdc68b48e5ce7f33ff5c7383e2a011077e7d330",
+      "meta_sha256": "731ea04e24e4711132c3e606f681399dfc5f999cc690be4b6b2917155367e4b3",
+      "reported_status": "ok",
+      "use_sim_time": true,
+      "commanded_speed": 0.5,
+      "rows": 1475,
+      "initial_gz_speed": 0.503,
+      "along_peak_brake_and_tail_m": 0.23870000000000013,
+      "horizontal_peak_brake_and_tail_m": 0.24043113359130525,
+      "reported_latency_in_recorded_clock_s": 0.18,
+      "tail_recorded_clock_span_s": 4.979999999999997,
+      "tail_max_gz_speed": 0.0416,
+      "cruise_displacement_over_integrated_velocity": 0.9999270820453802
+    },
+    {
+      "run": "lat_02",
+      "path": "experiments/paper_v3/identification/brake_hold/lat_02/trace.csv",
+      "trace_sha256": "e36bb7a1eb46f1ef4e38be34f848be8a8497d894fc3f80638eba7bc8721d07d7",
+      "meta_sha256": "c03cfb6643fb1f8c2860524a2fbdbc910a856178620ca53811c2cf32eefb976a",
+      "reported_status": "ok",
+      "use_sim_time": true,
+      "commanded_speed": 0.5,
+      "rows": 1424,
+      "initial_gz_speed": 0.4892,
+      "along_peak_brake_and_tail_m": 0.22340000000000027,
+      "horizontal_peak_brake_and_tail_m": 0.22490789225814226,
+      "reported_latency_in_recorded_clock_s": 0.18,
+      "tail_recorded_clock_span_s": 4.980000000000004,
+      "tail_max_gz_speed": 0.0489,
+      "cruise_displacement_over_integrated_velocity": 1.0013463151938502
+    },
+    {
+      "run": "lat_03",
+      "path": "experiments/paper_v3/identification/brake_hold/lat_03/trace.csv",
+      "trace_sha256": "4e15434d5619b622f6072e71ad624f106691f47e00cb78abcb7e9d12da921796",
+      "meta_sha256": "582d0c0b6ce3f01ee5f8543f2a778e17a3a04bf4d0ccde20fa0f438663b4d8b8",
+      "reported_status": "ok",
+      "use_sim_time": false,
+      "commanded_speed": 0.5,
+      "rows": 1392,
+      "initial_gz_speed": 0.483,
+      "along_peak_brake_and_tail_m": 0.21579999999999977,
+      "horizontal_peak_brake_and_tail_m": 0.2171324480587828,
+      "reported_latency_in_recorded_clock_s": 0.18,
+      "tail_recorded_clock_span_s": 4.9999001026153564,
+      "tail_max_gz_speed": 0.0395,
+      "cruise_displacement_over_integrated_velocity": 0.9986334485547019
+    },
+    {
+      "run": "long_01",
+      "path": "experiments/paper_v3/identification/brake_hold/long_01/trace.csv",
+      "trace_sha256": "7f937ed1a6195f5373f061b3215602a2470e1764fc683bd3e750ed1e55eae256",
+      "meta_sha256": "bf4c45d44242bd1f0d769e0d244c24d6c7df91d887dcf3accb1a2087b6d7d0c7",
+      "reported_status": "startup_failed",
+      "use_sim_time": true,
+      "commanded_speed": 0.5,
+      "rows": 101
+    },
+    {
+      "run": "long_02",
+      "path": "experiments/paper_v3/identification/brake_hold/long_02/trace.csv",
+      "trace_sha256": "46f0e37b721236f142eb6b4836e52ae0d44090422c8daeb3970640ed9110a364",
+      "meta_sha256": "9dd4f59eb2414db4fc548b2fc2ed3499fce364f71c7525cf28c57d821fc6cc77",
+      "reported_status": "not_settled",
+      "use_sim_time": true,
+      "commanded_speed": 0.5,
+      "rows": 1667,
+      "initial_gz_speed": 0.5012,
+      "along_peak_brake_and_tail_m": 0.23570000000000002,
+      "horizontal_peak_brake_and_tail_m": 0.23602595196291448,
+      "reported_latency_in_recorded_clock_s": null,
+      "tail_recorded_clock_span_s": null,
+      "tail_max_gz_speed": null,
+      "cruise_displacement_over_integrated_velocity": 1.0013459407916845
+    },
+    {
+      "run": "long_03",
+      "path": "experiments/paper_v3/identification/brake_hold/long_03/trace.csv",
+      "trace_sha256": "661210433ad5940792da53a7b5079a4fa816bfb8c3ad3c1fd5586c491405aa92",
+      "meta_sha256": "c06eb96dfdf57362fed9885ff223f3bc64a7d617266848a441288e26eb3e5fad",
+      "reported_status": "ok",
+      "use_sim_time": false,
+      "commanded_speed": 0.5,
+      "rows": 1432,
+      "initial_gz_speed": 0.4982,
+      "along_peak_brake_and_tail_m": 0.23019999999999996,
+      "horizontal_peak_brake_and_tail_m": 0.23057814293640233,
+      "reported_latency_in_recorded_clock_s": 0.18,
+      "tail_recorded_clock_span_s": 4.9999001026153564,
+      "tail_max_gz_speed": 0.0428,
+      "cruise_displacement_over_integrated_velocity": 0.9999435009497388
+    },
+    {
+      "run": "long_04",
+      "path": "experiments/paper_v3/identification/brake_hold/long_04/trace.csv",
+      "trace_sha256": "0c84f995578f4f6035f9735fd724f9eed66aa1750c227c80582d23e1fe249003",
+      "meta_sha256": "69a7db1041e6f1f534ae52262cb9bfd650b0ab9ab1ce34dc8faf0b6f60e01e13",
+      "reported_status": "ok",
+      "use_sim_time": true,
+      "commanded_speed": 0.5,
+      "rows": 1409,
+      "initial_gz_speed": 0.5021,
+      "along_peak_brake_and_tail_m": 0.23950000000000005,
+      "horizontal_peak_brake_and_tail_m": 0.23999460410600906,
+      "reported_latency_in_recorded_clock_s": 0.2,
+      "tail_recorded_clock_span_s": 4.980000000000004,
+      "tail_max_gz_speed": 0.0327,
+      "cruise_displacement_over_integrated_velocity": 0.9998634510472001
+    },
+    {
+      "run": "long_05",
+      "path": "experiments/paper_v3/identification/brake_hold/long_05/trace.csv",
+      "trace_sha256": "dc4e65a2fdf793a17f565c3cece87eacfecd7fc5043f4a3130babf26b53017a7",
+      "meta_sha256": "487f6ac0039684f2a31585113de26ddeee3d4f90c88574173dc48f0d4273c5e7",
+      "reported_status": "ok",
+      "use_sim_time": true,
+      "commanded_speed": 0.5,
+      "rows": 1433,
+      "initial_gz_speed": 0.5101,
+      "along_peak_brake_and_tail_m": 0.246,
+      "horizontal_peak_brake_and_tail_m": 0.24600983720168593,
+      "reported_latency_in_recorded_clock_s": 0.2,
+      "tail_recorded_clock_span_s": 4.980000000000004,
+      "tail_max_gz_speed": 0.0434,
+      "cruise_displacement_over_integrated_velocity": 0.9998858385289774
+    },
+    {
+      "run": "v10_01",
+      "path": "experiments/paper_v3/mechanisms/brake_1p0/v10_01/trace.csv",
+      "trace_sha256": "306fe085081c7dd945900b72cd93fc61b0b61f6e0df0d96dcf5b692d902f9579",
+      "meta_sha256": "ff778fca50b18f074e944ef4ae544793b0a96c3675015c6066e16c5f6488000a",
+      "reported_status": "ok",
+      "use_sim_time": true,
+      "commanded_speed": 1.0,
+      "rows": 1385,
+      "initial_gz_speed": 1.1074,
+      "along_peak_brake_and_tail_m": 0.5155000000000001,
+      "horizontal_peak_brake_and_tail_m": 0.5160866303247935,
+      "reported_latency_in_recorded_clock_s": 0.18,
+      "tail_recorded_clock_span_s": 4.979999999999997,
+      "tail_max_gz_speed": 0.0406,
+      "cruise_displacement_over_integrated_velocity": 1.000922954003829
+    },
+    {
+      "run": "v10_02",
+      "path": "experiments/paper_v3/mechanisms/brake_1p0/v10_02/trace.csv",
+      "trace_sha256": "a46b2e6b1b7ff2d7480e5798ac716ca0401d861e4599a673d7a6406e4eb1b550",
+      "meta_sha256": "96fd05f5a24c4b5511f14f7606fad78738120831c3eb5b0bfa68e1bf6a34a524",
+      "reported_status": "ok",
+      "use_sim_time": false,
+      "commanded_speed": 1.0,
+      "rows": 1368,
+      "initial_gz_speed": 1.0956,
+      "along_peak_brake_and_tail_m": 0.5033000000000001,
+      "horizontal_peak_brake_and_tail_m": 0.5039254905241449,
+      "reported_latency_in_recorded_clock_s": 0.1801,
+      "tail_recorded_clock_span_s": 4.999899864196777,
+      "tail_max_gz_speed": 0.0391,
+      "cruise_displacement_over_integrated_velocity": 1.0005560351234506
+    },
+    {
+      "run": "v10_03",
+      "path": "experiments/paper_v3/mechanisms/brake_1p0/v10_03/trace.csv",
+      "trace_sha256": "a3750f1056f8472ee3adba251960e47183e9225e182e9785a71e3199a766f9bb",
+      "meta_sha256": "52feab2ba3c4fdf4ef6c31125109ce81878a50651758994c548158cebedf76ac",
+      "reported_status": "ok",
+      "use_sim_time": false,
+      "commanded_speed": 1.0,
+      "rows": 1380,
+      "initial_gz_speed": 1.1187,
+      "along_peak_brake_and_tail_m": 0.5085,
+      "horizontal_peak_brake_and_tail_m": 0.5094138788843507,
+      "reported_latency_in_recorded_clock_s": 0.18,
+      "tail_recorded_clock_span_s": 4.9999001026153564,
+      "tail_max_gz_speed": 0.0273,
+      "cruise_displacement_over_integrated_velocity": 0.9979613022495868
+    }
+  ],
+  "ce1_recomputation": [
+    {
+      "file": "experiments/paper_v3/identification/brake_hold/long_03/trace.csv",
+      "exact_match": true
+    },
+    {
+      "file": "experiments/paper_v3/identification/brake_hold/long_04/trace.csv",
+      "exact_match": true
+    },
+    {
+      "file": "experiments/paper_v3/identification/brake_hold/long_05/trace.csv",
+      "exact_match": true
+    },
+    {
+      "file": "experiments/paper_v3/mechanisms/brake_1p0/v10_01/trace.csv",
+      "exact_match": true
+    },
+    {
+      "file": "experiments/paper_v3/mechanisms/brake_1p0/v10_02/trace.csv",
+      "exact_match": true
+    },
+    {
+      "file": "experiments/paper_v3/mechanisms/brake_1p0/v10_03/trace.csv",
+      "exact_match": true
+    }
+  ],
+  "ce3_arithmetic_only": [
+    {
+      "delay_s": 0.0,
+      "toy_model_residual_m": 0.8223309216920793,
+      "discrete_vs_analytic_abs_error_m": 0.0007145285109959598
+    },
+    {
+      "delay_s": 0.24,
+      "toy_model_residual_m": 1.0379276652631717,
+      "discrete_vs_analytic_abs_error_m": 0.0014000650385085356
+    },
+    {
+      "delay_s": 0.6,
+      "toy_model_residual_m": 1.2858380329653099,
+      "discrete_vs_analytic_abs_error_m": 0.0008466407143706833
+    }
+  ],
+  "cautions": [
+    "Use-sim-time differs across runs; relative time does not prove clock-rate equivalence.",
+    "Direct PX4 setpoint tests bypass the LQR outer loop.",
+    "CE1 peak is a signed along-direction maximum, not horizontal radial maximum.",
+    "The fair-brake script reuses prior judgments and hard-codes CE3 survives=True."
+  ]
+}

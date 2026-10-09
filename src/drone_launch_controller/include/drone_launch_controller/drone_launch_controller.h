@@ -48,12 +48,6 @@ private:
     void localPosCallback(const geometry_msgs::PoseStamped::ConstPtr& pose);
 
     /**
-     * @brief 发布设置点
-     * @param pose 设置点
-     */
-    void publishSetpoint(const geometry_msgs::PoseStamped& pose);
-
-    /**
      * @brief 发送设置点前的检查
      * @param duration_seconds 检查持续时间（秒）
      * @param rate_hz 检查频率（Hz）
@@ -62,10 +56,16 @@ private:
     bool sendSetpointsBeforeOffboard(double duration_seconds, double rate_hz);
 
     /**
-     * @brief 禁用自动返回和失败安全
-     * @return true：成功，false：失败
+     * @brief 在指定时长内按频率持续发布 setpoint（等待期间保持 OFFBOARD 不掉出）
+     * @param duration_seconds 持续时长（秒）
+     * @param rate_hz 发布频率（Hz）
      */
-    bool disableRTLAndFailsafe();
+    void publishSetpointsFor(double duration_seconds, double rate_hz);
+
+    /**
+     * @brief 禁用自动返回和失败安全（任一参数设置失败仅告警，不中断流程）
+     */
+    void disableRTLAndFailsafe();
 
     /**
      * @brief 等待离线模式
@@ -82,8 +82,7 @@ private:
     bool setOffboardMode(int max_retries = 3);
 
     /**
-     * @brief 解锁无人机电机
-     * @param force 是否强制解锁（默认false）
+     * @brief 检查前置条件后解锁无人机电机
      * @return true：成功，false：失败
      */
     bool armMotorsWithCheck();

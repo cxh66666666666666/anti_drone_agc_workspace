@@ -1,0 +1,32 @@
+# 目标速度 0.6 m/s 需低于车辆上限 1.0 m/s（agc_params.yaml: commander.max_linear_speed_mps），这是可达性要求。
+# 可达性核查：目标航段 (6.5,2.5)->(8.5,4.5) 的地面投影到障碍 OBB 的最小净空约 2.04 m，
+# 远大于 clearance.protection_m(0.80) + 地图量化误差(res/√2≈0.354)，避免「安全接近点落在规划
+# 膨胀栅格内 -> astar_no_path -> /agc/planner/unreachable」使地面不可达（原 y=2.5 航段已复现该问题）。
+scenario_id: flat_linear_target
+locked: true
+note: "仅目标运动 target_motion 与对照组 scenario_flat 不同；所有阈值在 run 前锁定；本文件哈希写入 run 日志"
+car_start: [-4.0, -3.0, 0.11, 0.0]      # x, y, z, yaw；必须与无人机 spawn 点 (0,0) 分开
+target_start: [6.5, 2.5, 2.0, 0.0]      # x, y, z, yaw；z 由 target.default_height_m 校验
+drone_start: [0.0, 0.0, 0.0]
+target_motion:
+  mode: linear            # static | linear
+  speed_mps: 0.6
+  waypoints: [[6.5, 2.5], [8.5, 4.5]]
+obstacles:
+  - {name: pole_1, pose: [2.5, 0.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+  - {name: pole_2, pose: [4.5, 1.6, 1.5, 0.0, 0.0, 0.0], size: [0.3, 0.3, 3.0]}
+map:
+  resolution_m: 0.5
+  size_x_m: 40.0
+  size_y_m: 40.0
+  origin_x: -20.0
+  origin_y: -20.0
+  unknown_is_obstacle: true
+thresholds:
+  approach_radius_m: 3.0
+  hold_window_s: 5.0
+  confidence_min: 0.5
+  search_timeout_s: 60.0
+  approach_timeout_s: 60.0
+  mission_timeout_s: 120.0
+  target_lost_tolerance_s: 2.0

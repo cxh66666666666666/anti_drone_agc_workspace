@@ -1,0 +1,14 @@
+<launch>
+    <!-- 一键启动：仿真(gzserver+感知) + 控制器，可选 gzclient 界面 -->
+    <arg name="gui" default="true" doc="是否启动 Gazebo 客户端界面"/>
+    <arg name="quiet_car_status" default="false" doc="为 true 时不将 car_status 回显到日志"/>
+
+    <!-- 仿真栈已负责设置模型路径与仿真时钟参数，此处不重复设置 -->
+    <include file="$(find rl_ground_avoidance)/launch/ground_sim.launch"/>
+
+    <include file="$(find car_launch_controller)/launch/car_controller.launch">
+        <arg name="quiet_car_status" value="$(arg quiet_car_status)"/>
+    </include>
+
+    <node pkg="gazebo_ros" type="gzclient" name="ground_gazebo_gui" if="$(arg gui)"/>
+</launch>

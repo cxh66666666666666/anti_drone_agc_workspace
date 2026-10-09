@@ -1,0 +1,5 @@
+---
+bool success
+uint8 result
+CarHealthStatus health_status
+string message

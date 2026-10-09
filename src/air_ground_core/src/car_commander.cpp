@@ -1,3 +1,13 @@
+// ============================================================================
+// 【已废弃】car_commander —— 地面旧执行口
+// 依据 M0 接口契约 v1.1：地面唯一执行口为 /agc/ground/cmd_vel，
+// 由 ground_commander + ground_drive_adapter 实现（kinematic_sim 后端）。
+// 本节点持续发布固定画圆速度，与唯一控制权冲突，故：
+//   - 不再被任何 launch 启动；
+//   - 已从 CMakeLists.txt 构建中移除；
+//   - 源码仅作历史保留，代码本体不做修改。
+// ============================================================================
+
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 #include <clocale>
